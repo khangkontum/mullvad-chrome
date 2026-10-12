@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Orb setup: toolchain + dependencies so lint, tsc, test and build work immediately.
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+step() {
+  local name=$1
+  shift
+  local start=$SECONDS
+  echo "==> $name"
+  "$@"
+  echo "<== $name ($((SECONDS - start))s)"
+}
+
+# package.json engines + .npmrc engine-strict require npm >= 11.11.
+ensure_npm() {
+  local required=11.11.0 current
+  current=$(npm --version)
+  if [ "$(printf '%s\n%s\n' "$required" "$current" | sort -V | head -n1)" != "$required" ]; then
+    sudo npm install -g --no-fund --no-audit npm@11
+  fi
+  echo "node $(node --version), npm $(npm --version)"
+}
+
+install_deps() {
+  npm ci --no-fund --no-audit
+}
+
+step "npm toolchain" ensure_npm
+step "npm dependencies" install_deps
