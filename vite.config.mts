@@ -3,7 +3,7 @@ import { dirname, relative } from 'path';
 import { defineConfig, UserConfig } from 'vite';
 import Vue from '@vitejs/plugin-vue';
 import UnoCSS from 'unocss/vite';
-import { r, port, isDev } from './scripts/utils';
+import { r, isDev } from './scripts/utils';
 
 export const sharedConfig: UserConfig = {
   root: r('src'),
@@ -34,16 +34,10 @@ export const sharedConfig: UserConfig = {
   },
 };
 
-export default defineConfig(({ command }) => ({
+// Extension pages (popup, options). The MV3 service worker is built by vite.config.background.mts
+export default defineConfig(() => ({
   ...sharedConfig,
-  base: command === 'serve' ? `http://localhost:${port}/` : '/dist/',
-  server: {
-    port,
-    hmr: {
-      host: 'localhost',
-    },
-    cors: true,
-  },
+  base: '/dist/',
   build: {
     outDir: r('extension/dist'),
     emptyOutDir: false,
@@ -51,7 +45,6 @@ export default defineConfig(({ command }) => ({
     // https://developer.chrome.com/docs/webstore/program_policies/#:~:text=Code%20Readability%20Requirements
     rollupOptions: {
       input: {
-        background: r('src/background/index.html'),
         options: r('src/options/index.html'),
         popup: r('src/popup/index.html'),
       },

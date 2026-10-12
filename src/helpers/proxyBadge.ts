@@ -1,6 +1,7 @@
 import { checkDomain } from '@/helpers/domain';
 import { isLocalOrReservedIP } from '@/helpers/socksProxy/socksProxy';
-import { ProxyDetails } from '@/helpers/socksProxy/socksProxy.types';
+import { ProxyDetails, ProxyDetailsMap } from '@/helpers/socksProxy/socksProxy.types';
+import { parseStored } from '@/helpers/storage';
 import { getActiveProxyDetails, getActiveTab } from '@/helpers/tabs';
 
 export const updateCurrentTabProxyBadge = async () => {
@@ -12,26 +13,34 @@ export const updateCurrentTabProxyBadge = async () => {
 };
 
 export const updateTabProxyBadge = async (
-  tab: browser.tabs.Tab,
+  tab: chrome.tabs.Tab,
   activeProxyDetails: ProxyDetails,
 ) => {
   const { id: tabId, url } = tab;
-  const { excludedHosts } = await browser.storage.local.get('excludedHosts');
-  const { hostProxiesDetails } = await browser.storage.local.get('hostProxiesDetails');
-  const { globalProxyDetails } = await browser.storage.local.get('globalProxyDetails');
-  const { randomProxyMode } = await browser.storage.local.get('randomProxyMode');
+  const { excludedHosts, hostProxiesDetails, globalProxyDetails, randomProxyMode } =
+    await chrome.storage.local.get([
+      'excludedHosts',
+      'hostProxiesDetails',
+      'globalProxyDetails',
+      'randomProxyMode',
+    ]);
 
-  const hostProxiesDetailsParsed = JSON.parse(hostProxiesDetails);
-  const excludedHostsParsed = JSON.parse(excludedHosts);
-  const globalProxyDetailsParsed = JSON.parse(globalProxyDetails);
-  const randomProxyModeParsed = JSON.parse(randomProxyMode);
+  const hostProxiesDetailsParsed: ProxyDetailsMap = parseStored(hostProxiesDetails, {});
+  const excludedHostsParsed: string[] = parseStored(excludedHosts, []);
+  const globalProxyDetailsParsed: Partial<ProxyDetails> = parseStored(globalProxyDetails, {});
+  const randomProxyModeParsed: boolean = parseStored(randomProxyMode, false);
 
-  const tabHost = new URL(url!).hostname;
+  if (!url || !/^(https?|wss?):$/.test(new URL(url).protocol)) {
+    await setTabExtBadge(tab, false, false);
+    return;
+  }
+
+  const tabHost = new URL(url).hostname;
   const { domain, fullHost, hasSubdomain } = checkDomain(tabHost);
 
   // Block for local/reserved IPs
   if (isLocalOrReservedIP(tabHost)) {
-    browser.browserAction.setTitle({ tabId, title: 'Local/Reserved IP - No proxy needed' });
+    chrome.action.setTitle({ tabId, title: 'Local/Reserved IP - No proxy needed' });
     await setTabExtBadge(tab, false, false);
     return;
   }
@@ -40,7 +49,7 @@ export const updateTabProxyBadge = async (
   if (randomProxyModeParsed) {
     // If it's random proxy mode, we show a shuffle icon on the badge
     const title = `Random proxy`;
-    browser.browserAction.setTitle({ tabId, title });
+    chrome.action.setTitle({ tabId, title });
     await setTabExtBadge(tab, true, false, '🔀', true);
     return;
   }
@@ -48,15 +57,14 @@ export const updateTabProxyBadge = async (
   // 1. Check subdomain level
   if (hasSubdomain) {
     if (excludedHostsParsed.includes(fullHost)) {
-      browser.browserAction.setTitle({ tabId, title: `${fullHost} is set to never be proxied` });
+      chrome.action.setTitle({ tabId, title: `${fullHost} is set to never be proxied` });
       await setTabExtBadge(tab, false, true);
       return;
     }
 
     if (hostProxiesDetailsParsed[fullHost]?.socksEnabled) {
-      const proxyDNSMessage = activeProxyDetails.proxyDNS ? 'DNS proxied' : 'DNS not proxied';
-      const title = `${activeProxyDetails.city}, ${activeProxyDetails.country}\nServer: ${activeProxyDetails.server}\n${proxyDNSMessage}`;
-      browser.browserAction.setTitle({ tabId, title });
+      const title = `${activeProxyDetails.city}, ${activeProxyDetails.country}\nServer: ${activeProxyDetails.server}`;
+      chrome.action.setTitle({ tabId, title });
       await setTabExtBadge(tab, true, false, activeProxyDetails.countryCode);
       return;
     }
@@ -64,35 +72,33 @@ export const updateTabProxyBadge = async (
 
   // 2. Check domain level
   if (excludedHostsParsed.includes(domain)) {
-    browser.browserAction.setTitle({ tabId, title: `${domain} is set to never be proxied` });
+    chrome.action.setTitle({ tabId, title: `${domain} is set to never be proxied` });
     await setTabExtBadge(tab, false, true);
     return;
   }
 
   if (hostProxiesDetailsParsed[domain]?.socksEnabled) {
-    const proxyDNSMessage = activeProxyDetails.proxyDNS ? 'DNS proxied' : 'DNS not proxied';
-    const title = `${activeProxyDetails.city}, ${activeProxyDetails.country}\nServer: ${activeProxyDetails.server}\n${proxyDNSMessage}`;
-    browser.browserAction.setTitle({ tabId, title });
+    const title = `${activeProxyDetails.city}, ${activeProxyDetails.country}\nServer: ${activeProxyDetails.server}`;
+    chrome.action.setTitle({ tabId, title });
     await setTabExtBadge(tab, true, false, activeProxyDetails.countryCode);
     return;
   }
 
   // 3. Check global proxy
   if (globalProxyDetailsParsed.socksEnabled) {
-    const proxyDNSMessage = activeProxyDetails.proxyDNS ? 'DNS proxied' : 'DNS not proxied';
-    const title = `${activeProxyDetails.city}, ${activeProxyDetails.country}\nServer: ${activeProxyDetails.server}\n${proxyDNSMessage}`;
-    browser.browserAction.setTitle({ tabId, title });
+    const title = `${activeProxyDetails.city}, ${activeProxyDetails.country}\nServer: ${activeProxyDetails.server}`;
+    chrome.action.setTitle({ tabId, title });
     await setTabExtBadge(tab, true, false, activeProxyDetails.countryCode);
     return;
   }
 
   // 4. Default: no proxy
-  browser.browserAction.setTitle({ tabId, title: 'Proxy not in use' });
+  chrome.action.setTitle({ tabId, title: 'Proxy not in use' });
   await setTabExtBadge(tab, false, false);
 };
 
 const setTabExtBadge = async (
-  tab: browser.tabs.Tab,
+  tab: chrome.tabs.Tab,
   proxy = true,
   isExcluded = false,
   countryCode = 'P',
@@ -101,16 +107,25 @@ const setTabExtBadge = async (
   const { id: tabId } = tab;
 
   if (isExcluded) {
-    browser.browserAction.setBadgeText({ text: '🚫', tabId });
-    browser.browserAction.setBadgeBackgroundColor({ color: '#ffd524', tabId });
-    browser.browserAction.setBadgeTextColor({ color: 'black', tabId });
+    chrome.action.setBadgeText({ text: '🚫', tabId });
+    chrome.action.setBadgeBackgroundColor({ color: '#ffd524', tabId });
+    chrome.action.setBadgeTextColor({ color: 'black', tabId });
   } else if (proxy) {
-    browser.browserAction.setBadgeText({ text: countryCode.toUpperCase(), tabId });
-    browser.browserAction.setBadgeBackgroundColor({ color: '#ffd524', tabId });
-    browser.browserAction.setBadgeTextColor({ color: 'black', tabId });
+    chrome.action.setBadgeText({ text: countryCode.toUpperCase(), tabId });
+    chrome.action.setBadgeBackgroundColor({ color: '#ffd524', tabId });
+    chrome.action.setBadgeTextColor({ color: 'black', tabId });
   } else if (randomProxyMode) {
-    browser.browserAction.setBadgeText({ text: countryCode, tabId });
+    chrome.action.setBadgeText({ text: countryCode, tabId });
   } else {
-    browser.browserAction.setBadgeText({ text: '', tabId });
+    chrome.action.setBadgeText({ text: '', tabId });
+  }
+};
+
+export const clearAllBadges = async () => {
+  const tabs = await chrome.tabs.query({});
+  for (const tab of tabs) {
+    if (tab.id !== undefined) {
+      await chrome.action.setBadgeText({ text: '', tabId: tab.id });
+    }
   }
 };

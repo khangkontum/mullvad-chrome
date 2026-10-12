@@ -1,3 +1,5 @@
+import { parseStored } from '@/helpers/storage';
+
 // Static fallback for base conncheck URL
 const CONNCHECK_URL = 'am.i.mullvad.net';
 export const CONFIG_ENDPOINT = `https://${CONNCHECK_URL}/config`;
@@ -15,11 +17,9 @@ export const DEFAULT_CONFIG: ConnCheckConfig = {
 };
 
 export const getConfig = async (): Promise<ConnCheckConfig> => {
-  const { connCheckConfig } = await browser.storage.local.get('connCheckConfig');
+  const { connCheckConfig } = await chrome.storage.local.get('connCheckConfig');
 
-  return connCheckConfig
-    ? { ...DEFAULT_CONFIG, ...(JSON.parse(connCheckConfig) as Partial<ConnCheckConfig>) }
-    : DEFAULT_CONFIG;
+  return { ...DEFAULT_CONFIG, ...parseStored<Partial<ConnCheckConfig>>(connCheckConfig, {}) };
 };
 
 export const initConfig = async (): Promise<ConnCheckConfig> => {
@@ -32,7 +32,7 @@ export const initConfig = async (): Promise<ConnCheckConfig> => {
     }
     const config: Partial<ConnCheckConfig> = await response.json();
     const merged = { ...DEFAULT_CONFIG, ...config };
-    await browser.storage.local.set({ connCheckConfig: JSON.stringify(merged) });
+    await chrome.storage.local.set({ connCheckConfig: JSON.stringify(merged) });
     return merged;
   } catch {
     return getConfig();

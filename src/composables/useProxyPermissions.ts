@@ -20,12 +20,12 @@ const useProxyPermissions = () => {
   // from any context (e.g. the browser's permission management UI).
   const syncPermissionState = () => void checkProxyPermissions();
 
-  browser.permissions.onAdded.addListener(syncPermissionState);
-  browser.permissions.onRemoved.addListener(syncPermissionState);
+  chrome.permissions.onAdded.addListener(syncPermissionState);
+  chrome.permissions.onRemoved.addListener(syncPermissionState);
 
   onUnmounted(() => {
-    browser.permissions.onAdded.removeListener(syncPermissionState);
-    browser.permissions.onRemoved.removeListener(syncPermissionState);
+    chrome.permissions.onAdded.removeListener(syncPermissionState);
+    chrome.permissions.onRemoved.removeListener(syncPermissionState);
   });
 
   return {

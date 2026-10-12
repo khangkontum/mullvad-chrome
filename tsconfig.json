@@ -11,7 +11,7 @@
     "resolveJsonModule": true,
     "noUnusedLocals": false,
     "forceConsistentCasingInFileNames": true,
-    "types": ["vite/client", "@types/firefox-webext-browser", "vitest/globals", "node"],
+    "types": ["vite/client", "chrome", "vitest/globals", "node"],
     "paths": {
       "@/*": ["./src/*"]
     }

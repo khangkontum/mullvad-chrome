@@ -50,9 +50,3 @@ export interface ProxyOperationArgs {
   ipv4_address: string;
   port?: number;
 }
-
-export interface RequestDetails extends browser.proxy._OnRequestDetails {
-  // frameAncestors is not documented but exists and can be reasonably relied on
-  // See: https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/proxy/RequestDetails
-  frameAncestors?: Array<{ frameId: number; url: string }>;
-}

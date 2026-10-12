@@ -1,19 +1,20 @@
 import { checkDomain } from '@/helpers/domain';
-import { ProxyDetails } from '@/helpers/socksProxy/socksProxy.types';
+import { ProxyDetails, ProxyDetailsMap } from '@/helpers/socksProxy/socksProxy.types';
+import { parseStored } from '@/helpers/storage';
 
 export const reloadMatchingTabs = async (url: string) => {
   const urlPattern = `*://*.${url}/*`;
 
-  const tabs = await browser.tabs.query({ url: urlPattern });
+  const tabs = await chrome.tabs.query({ url: urlPattern });
   tabs.forEach((tab) => {
     if (tab.id) {
-      browser.tabs.reload(tab.id);
+      chrome.tabs.reload(tab.id);
     }
   });
 };
 
 export const reloadGlobalProxiedTabs = async (excludedURLs: string[]) => {
-  const tabs = await browser.tabs.query({ url: '*://*/*' });
+  const tabs = await chrome.tabs.query({ url: '*://*/*' });
 
   const tabsToReload = tabs.filter((tab) => {
     if (!tab.url) {
@@ -24,7 +25,7 @@ export const reloadGlobalProxiedTabs = async (excludedURLs: string[]) => {
 
   tabsToReload.forEach((tab) => {
     if (tab.id) {
-      browser.tabs.reload(tab.id);
+      chrome.tabs.reload(tab.id);
     }
   });
 };
@@ -47,19 +48,22 @@ export const getActiveTabDetails = async () => {
   return {
     host: activeTabURL.hostname,
     protocol: activeTabURL.protocol,
-    isAboutPage: activeTabURL.protocol === 'about:',
-    isExtensionPage: activeTabURL.protocol === 'moz-extension:',
+    // Browser internal pages (chrome://, about:, edge://…), which are never proxied
+    isAboutPage: ['about:', 'chrome:', 'edge:', 'brave:', 'devtools:'].includes(
+      activeTabURL.protocol,
+    ),
+    isExtensionPage: activeTabURL.protocol === 'chrome-extension:',
   };
 };
 
 export const getActiveProxyDetails = async () => {
   const globalProxyDetails = await getGlobalProxyDetails();
-  const { hostProxiesDetails } = await browser.storage.local.get('hostProxiesDetails');
+  const { hostProxiesDetails } = await chrome.storage.local.get('hostProxiesDetails');
+  const activeTab = await getActiveTab();
 
-  if (hostProxiesDetails) {
-    const hostProxiesDetailsParsed = JSON.parse(hostProxiesDetails);
-    const activeTab = await getActiveTab();
-    const tabHost = new URL(activeTab.url!).hostname;
+  if (hostProxiesDetails && activeTab?.url) {
+    const hostProxiesDetailsParsed: ProxyDetailsMap = parseStored(hostProxiesDetails, {});
+    const tabHost = new URL(activeTab.url).hostname;
     const { domain } = checkDomain(tabHost);
 
     // Check subdomain proxy first
@@ -77,15 +81,12 @@ export const getActiveProxyDetails = async () => {
 };
 
 const getGlobalProxyDetails = async (): Promise<ProxyDetails> => {
-  const response = await browser.storage.local.get('globalProxyDetails');
+  const response = await chrome.storage.local.get('globalProxyDetails');
 
-  if ('globalProxyDetails' in response) {
-    return JSON.parse(response.globalProxyDetails);
-  }
-  return { socksEnabled: false };
+  return parseStored(response.globalProxyDetails, { socksEnabled: false });
 };
 
 export const getActiveTab = async () => {
-  const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
+  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
   return activeTab;
 };

@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 
 // Mock browser API
-global.browser = {
+global.chrome = {
   runtime: {
     getManifest: vi.fn(() => ({
       version: '0.9.11',
@@ -21,4 +21,4 @@ global.browser = {
   tabs: {
     query: vi.fn(),
   },
-} as unknown as typeof browser;
+} as unknown as typeof chrome;
