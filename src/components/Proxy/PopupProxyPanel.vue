@@ -275,10 +275,6 @@ watchEffect(() => {
           settings from the active tab
         </li>
         <li>
-          <strong><n-tag round size="small" type="info"> proxy </n-tag></strong> to configure and
-          use Mullvad proxy servers
-        </li>
-        <li>
           <strong><n-tag round size="small" type="info"> all_urls </n-tag></strong> to have granular
           proxy settings
         </li>

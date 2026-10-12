@@ -30,7 +30,6 @@ const { isGranted, requestPermissions } = useProxyPermissions();
       <IconLabel type="warning" class="my-2">
         <ul>
           <li>- <strong>tabs</strong> to show proxy settings from the active tab</li>
-          <li>- <strong>proxy</strong> to configure and use Mullvad proxy servers</li>
           <li>- <strong>&lt;all_urls&gt;</strong> to have granular proxy settings</li>
         </ul>
       </IconLabel>
