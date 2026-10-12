@@ -9,7 +9,7 @@ import {
 } from '@/helpers/proxyBadge';
 import { getActiveProxyDetails } from '@/helpers/tabs';
 
-import { PROXY_STORAGE_KEYS, updateProxySettings } from './proxy';
+import { onProxySettingsChanged, PROXY_STORAGE_KEYS, updateProxySettings } from './proxy';
 import {
   onExtensionDisabled,
   onExtensionEnabled,
@@ -38,12 +38,13 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
+// The optional permissions only gate the per-tab badge and active-tab features: the proxy
+// settings keep applying when they are revoked (e.g. site access set to "on click").
 chrome.permissions.onAdded.addListener(() => {
-  void updateProxySettings().then(refreshBadge);
+  void refreshBadge();
 });
 
 chrome.permissions.onRemoved.addListener(async () => {
-  await updateProxySettings();
   if (!(await getProxyPermissions())) {
     await clearAllBadges();
   }
@@ -58,6 +59,11 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
 chrome.tabs.onUpdated.addListener(async (_tabId, _changeInfo, tab) => {
   if (!tab.active || !(await getProxyPermissions())) return;
   await updateTabProxyBadge(tab, await getActiveProxyDetails());
+});
+
+// Another extension (or a policy) may take or release control of the proxy settings
+chrome.proxy.settings.onChange.addListener((details) => {
+  void onProxySettingsChanged(details).then(refreshBadge);
 });
 
 chrome.proxy.onProxyError.addListener((details) => {

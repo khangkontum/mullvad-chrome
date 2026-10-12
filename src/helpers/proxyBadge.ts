@@ -2,6 +2,7 @@ import { checkDomain } from '@/helpers/domain';
 import { isLocalOrReservedIP } from '@/helpers/socksProxy/socksProxy';
 import { ProxyDetails, ProxyDetailsMap } from '@/helpers/socksProxy/socksProxy.types';
 import { parseStored } from '@/helpers/storage';
+import { isProxyBroken, parseProxyStatus, PROXY_STATUS_KEY } from '@/helpers/proxyStatus';
 import { getActiveProxyDetails, getActiveTab } from '@/helpers/tabs';
 
 export const updateCurrentTabProxyBadge = async () => {
@@ -29,6 +30,17 @@ export const updateTabProxyBadge = async (
   const excludedHostsParsed: string[] = parseStored(excludedHosts, []);
   const globalProxyDetailsParsed: Partial<ProxyDetails> = parseStored(globalProxyDetails, {});
   const randomProxyModeParsed: boolean = parseStored(randomProxyMode, false);
+
+  const { [PROXY_STATUS_KEY]: storedStatus } = await chrome.storage.local.get(PROXY_STATUS_KEY);
+  const status = parseProxyStatus(storedStatus);
+  if (isProxyBroken(status)) {
+    const title = status.error ?? 'Mullvad proxy settings are not in effect (controlled elsewhere)';
+    chrome.action.setTitle({ tabId, title });
+    await chrome.action.setBadgeText({ text: '!', tabId });
+    await chrome.action.setBadgeBackgroundColor({ color: '#e34039', tabId });
+    await chrome.action.setBadgeTextColor({ color: 'white', tabId });
+    return;
+  }
 
   if (!url || !/^(https?|wss?):$/.test(new URL(url).protocol)) {
     await setTabExtBadge(tab, false, false);

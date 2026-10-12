@@ -31,8 +31,8 @@ export async function getManifest(): Promise<chrome.runtime.ManifestV3> {
       type: 'module',
     },
     icons,
-    // `proxy` can't be an optional permission on Chrome. The PAC script is only applied once the
-    // user has granted the optional `tabs` + `<all_urls>` permissions (see helpers/permissions.ts).
+    // `proxy` can't be an optional permission on Chrome. The optional `tabs` + `<all_urls>`
+    // permissions are only used for the per-tab UI (see helpers/permissions.ts).
     permissions: ['management', 'privacy', 'proxy', 'storage'],
     host_permissions: ['*://*.mullvad.net/*'],
     optional_permissions: ['tabs'],

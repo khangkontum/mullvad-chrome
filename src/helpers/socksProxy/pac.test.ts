@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import vm from 'node:vm';
 
 import {
+  BLOCK_ALL_PAC,
   buildPacScript,
   compilePacRules,
-  pacFindProxy,
   PAC_BLOCK,
   ProxyState,
 } from '@/helpers/socksProxy/pac';
@@ -21,7 +21,7 @@ const socks = (host: string, port = 1080) => ({
 const details = (socksEnabled = true) => ({ socksEnabled, server: 'x', proxyDNS: true });
 
 const relay = (ip: string): SocksProxy =>
-  ({ online: true, hostname: ip, ipv4_address: ip, port: 1080 }) as SocksProxy;
+  ({ online: true, hostname: `relay-${ip}`, ipv4_address: ip, port: 1080 }) as SocksProxy;
 
 const baseState: ProxyState = {
   excludedHosts: [],
@@ -35,11 +35,13 @@ const baseState: ProxyState = {
 };
 
 // Evaluate the generated PAC script like Chrome would, and query it
-const runPac = (state: ProxyState, url: string) => {
+const evalPac = (script: string, url: string) => {
   const context = vm.createContext({});
-  vm.runInContext(buildPacScript(compilePacRules(state)), context);
+  vm.runInContext(script, context);
   return context.FindProxyForURL(url, new URL(url).hostname) as string;
 };
+const runPac = (state: ProxyState, url: string) =>
+  evalPac(buildPacScript(compilePacRules(state).rules), url);
 
 describe('PAC: per-domain rules apply to the requested host', () => {
   it('proxies a request to a host with a proxy rule (e.g. a third-party subresource)', () => {
@@ -168,24 +170,152 @@ describe('PAC: random mode', () => {
     expect(runPac(s, 'https://example.com/')).not.toBe('DIRECT');
   });
 
-  it('fails closed when no relay list is available', () => {
-    expect(runPac({ ...state, flatProxiesList: [] }, 'https://example.com/')).toBe(PAC_BLOCK);
+  it('fails closed when no relay list is available, except for the relay list API', () => {
+    const empty = { ...state, flatProxiesList: [] };
+    expect(compilePacRules(empty).issues).toHaveLength(1);
+    expect(runPac(empty, 'https://example.com/')).toBe(PAC_BLOCK);
+    expect(runPac(empty, 'https://api.mullvad.net/network/v1-beta1/socks-proxies')).toBe('DIRECT');
+    expect(runPac(empty, 'https://am.i.mullvad.net/json')).toBe(PAC_BLOCK);
+  });
+
+  describe('stability (rendezvous hashing)', () => {
+    const sites = Array.from({ length: 200 }, (_, i) => `https://www.site${i}.com/`);
+    const picks = (s: ProxyState) => sites.map((url) => runPac(s, url));
+    const before = picks(state);
+
+    it('spreads sites over relays', () => {
+      expect(new Set(before).size).toBeGreaterThan(40);
+    });
+
+    it('does not depend on the order of the relay list', () => {
+      expect(picks({ ...state, flatProxiesList: [...relays].reverse() })).toEqual(before);
+    });
+
+    it('only moves sites whose relay disappeared', () => {
+      const removed = relays.find((r) => before[0] === `SOCKS5 ${r.ipv4_address}:1080`)!;
+      const after = picks({ ...state, flatProxiesList: relays.filter((r) => r !== removed) });
+      const removedPac = `SOCKS5 ${removed.ipv4_address}:1080`;
+      sites.forEach((_, i) => {
+        if (before[i] === removedPac) expect(after[i]).not.toBe(removedPac);
+        else expect(after[i]).toBe(before[i]);
+      });
+      expect(before).toContain(removedPac);
+    });
+
+    it('moves only the sites won by a newly added relay', () => {
+      const added = relay('10.124.200.1');
+      const after = picks({ ...state, flatProxiesList: [...relays, added] });
+      const moved = sites.filter((_, i) => after[i] !== before[i]);
+      moved.forEach((url) =>
+        expect(runPac({ ...state, flatProxiesList: [...relays, added] }, url)).toBe(
+          'SOCKS5 10.124.200.1:1080',
+        ),
+      );
+      // ~1/51 of the sites are expected to move
+      expect(moved.length).toBeLessThan(20);
+    });
   });
 });
 
-describe('pacFindProxy', () => {
-  it('matches the generated PAC script', () => {
-    const rules = compilePacRules({
+describe('PAC: compiled rules', () => {
+  it('normalizes hosts', () => {
+    const { rules } = compilePacRules({
       ...baseState,
-      excludedHosts: ['protected.example'],
+      excludedHosts: ['PROTECTED.example.'],
     });
-    expect(pacFindProxy(rules, 'protected.example')).toBe('DIRECT');
-    expect(pacFindProxy(rules, 'PROTECTED.example.')).toBe('DIRECT');
+    expect(rules.excluded).toEqual([{ h: 'protected.example', s: true }]);
   });
 
-  it('defaults to DIRECT when nothing is configured', () => {
-    const rules = compilePacRules({ ...baseState, hostProxies: {}, hostProxiesDetails: {} });
-    expect(rules.global).toBeNull();
-    expect(pacFindProxy(rules, 'example.com')).toBe('DIRECT');
+  it('is inactive when nothing is configured', () => {
+    const compiled = compilePacRules({ ...baseState, hostProxies: {}, hostProxiesDetails: {} });
+    expect(compiled.active).toBe(false);
+    expect(compiled.rules.global).toBeNull();
+    expect(
+      runPac({ ...baseState, hostProxies: {}, hostProxiesDetails: {} }, 'https://a.com/'),
+    ).toBe('DIRECT');
+  });
+
+  it('BLOCK_ALL_PAC blocks everything', () => {
+    expect(evalPac(BLOCK_ALL_PAC, 'https://example.com/')).toBe(PAC_BLOCK);
+    expect(evalPac(BLOCK_ALL_PAC, 'https://api.mullvad.net/')).toBe(PAC_BLOCK);
+  });
+});
+
+describe('PAC: invalid proxies fail closed', () => {
+  const withHostProxy = (proxy: unknown): ProxyState => ({
+    ...baseState,
+    hostProxies: { 'protected.example': proxy as ReturnType<typeof socks> },
+  });
+
+  it.each([
+    ['host injecting a PAC fallback', { ...socks('10.64.0.1'), host: '10.64.0.1:1080; DIRECT' }],
+    ['host with semicolon', { ...socks('x'), host: 'a;DIRECT' }],
+    ['non-socks type', { ...socks('10.64.0.1'), type: 'http' }],
+    ['direct type', { ...socks('10.64.0.1'), type: 'direct' }],
+    ['port 0', socks('10.64.0.1', 0)],
+    ['port out of range', socks('10.64.0.1', 70000)],
+    ['port as string', { ...socks('10.64.0.1'), port: '1080' }],
+    ['missing proxy', undefined],
+  ])('%s → blocked, not direct', (_name, proxy) => {
+    const state = withHostProxy(proxy);
+    const compiled = compilePacRules(state);
+    expect(compiled.active).toBe(true);
+    expect(compiled.issues.length).toBeGreaterThan(0);
+    expect(runPac(state, 'https://protected.example/')).toBe(PAC_BLOCK);
+    expect(runPac(state, 'https://www.protected.example/')).toBe(PAC_BLOCK);
+    // other hosts are unaffected
+    expect(runPac(state, 'https://other.example/')).toBe('DIRECT');
+  });
+
+  it('enabled global proxy without a valid proxy blocks instead of going direct', () => {
+    const state: ProxyState = {
+      ...baseState,
+      hostProxies: {},
+      hostProxiesDetails: {},
+      globalProxy: {},
+      globalProxyDetails: { socksEnabled: true },
+    };
+    const compiled = compilePacRules(state);
+    expect(compiled.active).toBe(true);
+    expect(runPac(state, 'https://example.com/')).toBe(PAC_BLOCK);
+  });
+
+  it('formats IPv6 proxies with brackets and accepts SOCKS4', () => {
+    const state: ProxyState = {
+      ...baseState,
+      hostProxies: {
+        'protected.example': { ...socks('2001:DB8::1'), type: ProxyInfoType.socks4 },
+      },
+    };
+    expect(runPac(state, 'https://protected.example/')).toBe('SOCKS [2001:db8::1]:1080');
+  });
+
+  it('ignores invalid sites and excluded hosts, and reports them', () => {
+    const state: ProxyState = {
+      ...baseState,
+      excludedHosts: ['bad host', 42 as unknown as string],
+      hostProxies: { 'bad/host': socks('10.64.0.1') },
+      hostProxiesDetails: { 'bad/host': details() },
+    };
+    const compiled = compilePacRules(state);
+    expect(compiled.rules.excluded).toEqual([]);
+    expect(compiled.rules.hosts).toEqual([]);
+    expect(compiled.issues).toHaveLength(3);
+  });
+});
+
+describe('PAC: host normalization', () => {
+  it('matches IDN and uppercase rules against the punycode host Chrome passes to the PAC', () => {
+    const state: ProxyState = {
+      ...baseState,
+      hostProxies: {
+        'Bücher.Example': socks('10.8.0.1'),
+        ' WWW.Other.Example ': socks('10.9.0.1'),
+      },
+      hostProxiesDetails: { 'Bücher.Example': details(), ' WWW.Other.Example ': details() },
+    };
+    expect(runPac(state, 'https://xn--bcher-kva.example/')).toBe('SOCKS5 10.8.0.1:1080');
+    expect(runPac(state, 'https://shop.bücher.example/')).toBe('SOCKS5 10.8.0.1:1080');
+    expect(runPac(state, 'https://www.other.example/')).toBe('SOCKS5 10.9.0.1:1080');
   });
 });
