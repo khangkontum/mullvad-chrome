@@ -12,8 +12,12 @@ export type ProxyStatus = {
   levelOfControl: string;
   // rules are configured but another extension/policy controls the proxy settings
   controlLost: boolean;
-  // the stored settings couldn't be used: all traffic is blocked
+  // the stored settings are corrupted: all traffic is blocked until fixed or reset
   error: string | null;
+  // the stored settings couldn't be read (transient): all traffic is blocked, retrying
+  readError: string | null;
+  // chrome.proxy.settings.set/clear failed (e.g. not controllable)
+  applyError: string | null;
   // problems with individual rules (they fail closed or are ignored)
   issues: string[];
   // proxy settings only apply to incognito windows with incognito access
@@ -26,6 +30,8 @@ export const DEFAULT_PROXY_STATUS: ProxyStatus = {
   levelOfControl: 'controllable_by_this_extension',
   controlLost: false,
   error: null,
+  readError: null,
+  applyError: null,
   issues: [],
   incognitoAllowed: true,
 };
@@ -35,4 +41,8 @@ export const parseProxyStatus = (value: unknown): ProxyStatus => ({
   ...parseStored<Partial<ProxyStatus>>(value, {}),
 });
 
-export const isProxyBroken = (status: ProxyStatus) => status.controlLost || Boolean(status.error);
+export const isProxyBroken = (status: ProxyStatus) =>
+  status.controlLost ||
+  Boolean(status.error) ||
+  Boolean(status.readError) ||
+  Boolean(status.applyError);

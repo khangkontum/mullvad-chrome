@@ -1,4 +1,10 @@
-import { PROXY_STATUS_KEY, ProxyStatus } from '@/helpers/proxyStatus';
+import { clearAllBadges } from '@/helpers/proxyBadge';
+import {
+  isProxyBroken,
+  parseProxyStatus,
+  PROXY_STATUS_KEY,
+  ProxyStatus,
+} from '@/helpers/proxyStatus';
 import {
   BLOCK_ALL_PAC,
   buildPacScript,
@@ -43,8 +49,12 @@ const DEFAULTS: Record<StorageKey, unknown> = {
   randomProxyMode: false,
 };
 
-// Missing keys fall back to defaults, but stored values that are corrupted throw: guessing could
-// silently turn a proxied configuration into a direct connection.
+export class CorruptedSettingsError extends Error {}
+
+// Missing keys fall back to defaults, but stored rules that are corrupted throw: guessing could
+// silently turn a proxied configuration into a direct connection. The relay list is only a cache
+// of the Mullvad API, so a corrupted one is treated as empty (random mode then fails closed while
+// keeping api.mullvad.net reachable to reload it).
 const parseStrict = (key: StorageKey, value: unknown) => {
   if (value === undefined) return DEFAULTS[key];
   let parsed: unknown;
@@ -53,8 +63,9 @@ const parseStrict = (key: StorageKey, value: unknown) => {
   } catch {
     parsed = undefined;
   }
-  if (!SHAPES[key](parsed)) throw new Error(`stored "${key}" is corrupted`);
-  return parsed;
+  if (SHAPES[key](parsed)) return parsed;
+  if (key === 'flatProxiesList') return DEFAULTS[key];
+  throw new CorruptedSettingsError(`stored "${key}" is corrupted`);
 };
 
 // The random proxy pick is stable per site for the browser session (storage.session survives
@@ -73,20 +84,40 @@ export const getProxyState = async (): Promise<ProxyState> => {
   return { ...(state as Omit<ProxyState, 'randomSeed'>), randomSeed: await getRandomSeed() };
 };
 
-type Target = { script: string | null; compiled?: CompiledPac; error: string | null };
+type Target = {
+  script: string | null;
+  compiled?: CompiledPac;
+  // stored settings are corrupted: blocked until fixed or reset
+  error?: string;
+  // settings couldn't be read (e.g. storage I/O failure): blocked and retried
+  readError?: string;
+};
 
 const computeTarget = async (): Promise<Target> => {
   try {
     const compiled = compilePacRules(await getProxyState());
-    return {
-      script: compiled.active ? buildPacScript(compiled.rules) : null,
-      compiled,
-      error: null,
-    };
+    return { script: compiled.active ? buildPacScript(compiled.rules) : null, compiled };
   } catch (e) {
-    // Fail closed: block everything until the settings are fixed
-    return { script: BLOCK_ALL_PAC, error: `Proxy settings error: ${(e as Error).message}` };
+    // Fail closed either way: block everything
+    const message = (e as Error).message;
+    return e instanceof CorruptedSettingsError
+      ? { script: BLOCK_ALL_PAC, error: `Proxy settings error: ${message}` }
+      : { script: BLOCK_ALL_PAC, readError: `Could not read the proxy settings: ${message}` };
   }
+};
+
+// Retry after transient read failures, with backoff
+const RETRY_DELAYS = [1000, 2000, 5000, 10000, 30000];
+let retryCount = 0;
+let retryTimer: ReturnType<typeof setTimeout> | undefined;
+const scheduleRetry = (readError?: string) => {
+  clearTimeout(retryTimer);
+  if (!readError) {
+    retryCount = 0;
+    return;
+  }
+  const delay = RETRY_DELAYS[Math.min(retryCount++, RETRY_DELAYS.length - 1)];
+  retryTimer = setTimeout(() => void updateProxySettings(), delay);
 };
 
 const isIncognitoAllowed = async () => {
@@ -97,7 +128,7 @@ const isIncognitoAllowed = async () => {
   }
 };
 
-const writeStatus = async ({ script, compiled, error }: Target, applyError?: string) => {
+const writeStatus = async ({ script, compiled, error, readError }: Target, applyError?: string) => {
   const current = await chrome.proxy.settings.get({});
   const value = current.value as chrome.proxy.ProxyConfig | undefined;
   const applied =
@@ -110,21 +141,26 @@ const writeStatus = async ({ script, compiled, error }: Target, applyError?: str
     applied,
     levelOfControl: current.levelOfControl,
     controlLost: script !== null && !applied,
-    error: error ?? applyError ?? null,
+    error: error ?? null,
+    readError: readError ?? null,
+    applyError: applyError ?? null,
     issues: compiled?.issues ?? [],
     incognitoAllowed: await isIncognitoAllowed(),
   };
 
   const serialized = JSON.stringify(status);
   const stored = await chrome.storage.local.get(PROXY_STATUS_KEY);
+  const wasBroken = isProxyBroken(parseProxyStatus(stored[PROXY_STATUS_KEY]));
   if (stored[PROXY_STATUS_KEY] !== serialized) {
     await chrome.storage.local.set({ [PROXY_STATUS_KEY]: serialized });
   }
 
   // Global badge warning (per-tab badges are refreshed separately and also show it)
-  const broken = status.controlLost || Boolean(status.error);
+  const broken = isProxyBroken(status);
   await chrome.action.setBadgeText({ text: broken ? '!' : '' });
   if (broken) await chrome.action.setBadgeBackgroundColor({ color: '#e34039' });
+  // Recovered: drop the per-tab "!" badges (callers then refresh the active tab's badge)
+  if (wasBroken && !broken) await clearAllBadges();
   return status;
 };
 
@@ -149,13 +185,19 @@ const applyProxySettings = async () => {
     // e.g. not controllable (policy): reported through the status, not swallowed
     applyError = `Could not apply the proxy settings: ${(e as Error).message}`;
   }
+  scheduleRetry(target.readError);
   return writeStatus(target, applyError);
 };
 
 let queue: Promise<unknown> = Promise.resolve();
-const enqueue = <T>(task: () => Promise<T>) => {
-  const run = queue.then(task);
-  queue = run.catch((error) => console.error('Proxy settings update failed', error));
+// Errors are logged here, so callers (e.g. `void update().then(refreshBadge)`) never see
+// unhandled rejections; they get undefined instead of a status.
+const enqueue = <T>(task: () => Promise<T>): Promise<T | undefined> => {
+  const run = queue.then(task).catch((error) => {
+    console.error('Proxy settings update failed', error);
+    return undefined;
+  });
+  queue = run;
   return run;
 };
 

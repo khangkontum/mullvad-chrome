@@ -34,7 +34,11 @@ export const updateTabProxyBadge = async (
   const { [PROXY_STATUS_KEY]: storedStatus } = await chrome.storage.local.get(PROXY_STATUS_KEY);
   const status = parseProxyStatus(storedStatus);
   if (isProxyBroken(status)) {
-    const title = status.error ?? 'Mullvad proxy settings are not in effect (controlled elsewhere)';
+    const title =
+      status.error ??
+      status.readError ??
+      status.applyError ??
+      'Mullvad proxy settings are not in effect (controlled elsewhere)';
     chrome.action.setTitle({ tabId, title });
     await chrome.action.setBadgeText({ text: '!', tabId });
     await chrome.action.setBadgeBackgroundColor({ color: '#e34039', tabId });

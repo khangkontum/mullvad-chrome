@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { onProxySettingsChanged, updateProxySettings } from '@/background/proxy';
-import { BLOCK_ALL_PAC } from '@/helpers/socksProxy/pac';
+import vm from 'node:vm';
+
+import { BLOCK_ALL_PAC, PAC_BLOCK } from '@/helpers/socksProxy/pac';
 import { parseProxyStatus } from '@/helpers/proxyStatus';
 
 type Setting = { levelOfControl: string; value: chrome.proxy.ProxyConfig };
@@ -42,6 +44,7 @@ const chromeMock = {
   },
   extension: { isAllowedIncognitoAccess: vi.fn(async () => false) },
   action: { setBadgeText: vi.fn(), setBadgeBackgroundColor: vi.fn() },
+  tabs: { query: vi.fn(async () => [{ id: 1 }, { id: 2 }]) },
 };
 vi.stubGlobal('chrome', chromeMock);
 
@@ -54,6 +57,7 @@ const globalCH = {
 };
 
 beforeEach(() => {
+  vi.useRealTimers();
   vi.clearAllMocks();
   store = {};
   setting = { levelOfControl: 'controllable_by_this_extension', value: { mode: 'system' } };
@@ -104,7 +108,10 @@ describe('updateProxySettings', () => {
     Object.assign(store, globalCH);
     await updateProxySettings();
     expect(status().controlLost).toBe(true);
-    expect(status().error).toContain('not_controllable');
+    expect(status().applyError).toContain('not_controllable');
+    // not reported as corrupted settings (which would offer a reset)
+    expect(status().error).toBeNull();
+    expect(status().readError).toBeNull();
   });
 
   it('detects a stale PAC script (in control, but not our current rules)', async () => {
@@ -178,5 +185,72 @@ describe('onProxySettingsChanged', () => {
     setting = { levelOfControl: 'controlled_by_other_extensions', value: { mode: 'direct' } };
     await onProxySettingsChanged({ levelOfControl: 'controlled_by_other_extensions' });
     expect(status()).toMatchObject({ applied: false, controlLost: true });
+  });
+});
+
+describe('regressions from review', () => {
+  const evalPac = (url: string) => {
+    const ctx = vm.createContext({});
+    vm.runInContext(lastPac().data!, ctx);
+    return ctx.FindProxyForURL(url, new URL(url).hostname);
+  };
+
+  it('treats a corrupted relay list as empty instead of blocking everything', async () => {
+    Object.assign(store, globalCH, { flatProxiesList: '[{"broken' });
+    await updateProxySettings();
+    expect(lastPac().data).not.toBe(BLOCK_ALL_PAC);
+    expect(status().error).toBeNull();
+    expect(evalPac('https://example.com/')).toBe('SOCKS5 10.124.0.241:1080');
+  });
+
+  it('random mode with a corrupted relay list keeps api.mullvad.net reachable', async () => {
+    Object.assign(store, { randomProxyMode: 'true', flatProxiesList: '"oops"' });
+    await updateProxySettings();
+    expect(status().error).toBeNull();
+    expect(status().issues).toHaveLength(1);
+    expect(evalPac('https://api.mullvad.net/network/v1-beta1/socks-proxies')).toBe('DIRECT');
+    expect(evalPac('https://example.com/')).toBe(PAC_BLOCK);
+  });
+
+  it('storage read failures block traffic, are not reported as corruption, and are retried', async () => {
+    vi.useFakeTimers();
+    Object.assign(store, globalCH);
+    chromeMock.storage.local.get.mockRejectedValueOnce(new Error('IO error'));
+    await updateProxySettings();
+    expect(lastPac().data).toBe(BLOCK_ALL_PAC);
+    expect(status().readError).toContain('IO error');
+    expect(status().error).toBeNull();
+
+    await vi.advanceTimersByTimeAsync(1000);
+    await updateProxySettings(); // wait for the queued retry
+    expect(status().readError).toBeNull();
+    expect(lastPac().data).toContain('SOCKS5 10.124.0.241:1080');
+  });
+
+  it('never rejects (no unhandled rejections for fire-and-forget callers)', async () => {
+    Object.assign(store, globalCH);
+    chromeMock.proxy.settings.get.mockRejectedValueOnce(new Error('boom'));
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(updateProxySettings()).resolves.toBeUndefined();
+    await expect(
+      onProxySettingsChanged({ levelOfControl: 'controlled_by_this_extension' }),
+    ).resolves.toBeDefined();
+    expect(errorLog).toHaveBeenCalled();
+    errorLog.mockRestore();
+  });
+
+  it('clears stale per-tab "!" badges after recovering', async () => {
+    Object.assign(store, globalCH);
+    otherExtensionInControl = true;
+    setting = { levelOfControl: 'controlled_by_other_extensions', value: { mode: 'direct' } };
+    await updateProxySettings();
+    expect(chromeMock.tabs.query).not.toHaveBeenCalled();
+
+    otherExtensionInControl = false;
+    setting = { levelOfControl: 'controllable_by_this_extension', value: { mode: 'system' } };
+    await onProxySettingsChanged({ levelOfControl: 'controllable_by_this_extension' });
+    expect(status().controlLost).toBe(false);
+    expect(chromeMock.action.setBadgeText).toHaveBeenCalledWith({ text: '', tabId: 1 });
+    expect(chromeMock.action.setBadgeText).toHaveBeenCalledWith({ text: '', tabId: 2 });
   });
 });
