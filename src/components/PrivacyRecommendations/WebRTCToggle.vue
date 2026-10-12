@@ -13,7 +13,9 @@ const { setWebRTC, webRTCStatus } = useWebRtc();
 const webRTCLabel = ref('Enabled');
 
 watchEffect(() => {
-  webRTCLabel.value = webRTCStatus.value ? 'WebRTC enabled' : 'WebRTC disabled';
+  webRTCLabel.value = webRTCStatus.value
+    ? 'WebRTC unrestricted'
+    : 'WebRTC restricted to proxied connections (no IP leaks)';
 });
 </script>
 
@@ -23,7 +25,7 @@ watchEffect(() => {
       <h2 class="text-lg">WebRTC</h2>
       <n-tooltip>
         <template #trigger>
-          <n-switch v-model:value="webRTCStatus" @update-value="setWebRTC(webRTCStatus)" />
+          <n-switch v-model:value="webRTCStatus" />
         </template>
         <span>{{ webRTCLabel }}</span>
       </n-tooltip>

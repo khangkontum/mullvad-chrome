@@ -1,8 +1,6 @@
 import { computed, watch } from 'vue';
-import { management } from 'webextension-polyfill';
 
 import useBrowserStorageLocal from '@/composables/useBrowserStorageLocal';
-import useHttpsOnly from '@/composables/useHttpsOnly';
 import { Recommendation } from '@/composables/useRecommendations/Recommendation.types';
 import {
   defaultRecommendations,
@@ -31,7 +29,7 @@ const getRecommendationById = (id: string) => {
 };
 
 const updateExtensions = async () => {
-  const installedAddons = (await management.getAll()).filter((extension) =>
+  const installedAddons = (await chrome.management.getAll()).filter((extension) =>
     defaultRecommendationsIds.includes(extension.id),
   );
 
@@ -53,35 +51,9 @@ const updateExtensions = async () => {
   });
 };
 
-const updateHttpsOnly = async () => {
-  const httpsOnly = await useHttpsOnly();
-
-  updateRecommendation('https-only-mode', { activated: httpsOnly });
-};
-
-const updateDefaultSearch = async () => {
-  const searchEngines = await browser.search.get();
-
-  const defaultSearchEngine = searchEngines
-    .filter((search) => search.isDefault === true)[0]
-    .name.toLowerCase();
-
-  const isNotPrivacyFriendly = ['google', 'bing', 'yahoo', 'yandex', 'baidu', 'amazon'].some(
-    (search) => defaultSearchEngine.includes(search),
-  );
-
-  updateRecommendation('default-search', { activated: !isNotPrivacyFriendly });
-};
-
-const updateSettings = () => {
-  updateHttpsOnly();
-  updateDefaultSearch();
-};
-
 // Update browser extensions recommendations
 const getCurrentUserRecommendations = () => {
   updateExtensions();
-  updateSettings();
 };
 
 // Once recommendations has been returned from localStorage,

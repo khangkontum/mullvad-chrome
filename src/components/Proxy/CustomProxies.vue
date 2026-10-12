@@ -1,15 +1,6 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue';
-import {
-  NCard,
-  NCheckbox,
-  NDivider,
-  NIcon,
-  NCollapseTransition,
-  NInput,
-  NSwitch,
-  NTooltip,
-} from 'naive-ui';
+import { NCard, NDivider, NIcon, NCollapseTransition, NInput, NSwitch, NTooltip } from 'naive-ui';
 
 import Button from '@/components/Buttons/Button.vue';
 import FeChevronDown from '@/components/Icons/FeChevronDown.vue';
@@ -34,9 +25,7 @@ const {
   removeCustomProxy,
   removeGlobalProxy,
   toggleCustomProxy,
-  toggleCustomProxyDNS,
   toggleGlobalProxy,
-  toggleGlobalProxyDNS,
 } = useSocksProxy();
 
 const inputProxyDomain = ref('');
@@ -152,15 +141,6 @@ const clearError = () => {
             <h4 class="font-semibold">Server</h4>
             <div class="ml-2">{{ globalProxyDetails.server }}</div>
           </div>
-          <div class="flex items-center">
-            <h4 class="font-semibold pr-2">Proxy DNS</h4>
-            <n-checkbox
-              size="large"
-              :checked="globalProxyDetails.proxyDNS"
-              :focusable="false"
-              @update-checked="toggleGlobalProxyDNS"
-            />
-          </div>
         </div>
 
         <div class="flex justify-between">
@@ -231,15 +211,6 @@ const clearError = () => {
             <div class="flex">
               <h4 class="font-semibold">Server</h4>
               <div class="ml-2">{{ hostProxiesDetails[host].server }}</div>
-            </div>
-            <div class="flex items-center">
-              <h4 class="font-semibold pr-2">Proxy DNS</h4>
-              <n-checkbox
-                size="large"
-                :checked="hostProxiesDetails[host].proxyDNS"
-                :focusable="false"
-                @update-checked="toggleCustomProxyDNS(host)"
-              />
             </div>
           </div>
 

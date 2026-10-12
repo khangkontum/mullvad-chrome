@@ -148,31 +148,6 @@ const toggleCustomProxy = (host: string) => {
   checkStatus();
 };
 
-const toggleCustomProxyDNS = (host: string) => {
-  const targetHost = getTargetHost(host, hostProxiesDetails.value);
-  const updatedProxyDNS = !hostProxiesDetails.value[targetHost].proxyDNS;
-
-  hostProxiesDetails.value[targetHost].proxyDNS = updatedProxyDNS;
-  hostProxies.value[targetHost].proxyDNS = updatedProxyDNS;
-
-  updateCurrentTabProxyBadge();
-  if (proxyAutoReload.value) {
-    reloadMatchingTabs(targetHost);
-  }
-  checkStatus();
-};
-
-const toggleGlobalProxyDNS = () => {
-  const updatedGlobalProxyDNS = !globalProxyDetails.value.proxyDNS;
-  globalProxyDetails.value.proxyDNS = updatedGlobalProxyDNS;
-  globalProxy.value.proxyDNS = updatedGlobalProxyDNS;
-  if (proxyAutoReload.value) {
-    reloadGlobalProxiedTabs(combinedHosts.value);
-  }
-  updateCurrentTabProxyBadge();
-  checkStatus();
-};
-
 const setGlobalProxy = ({
   country,
   countryCode,
@@ -301,9 +276,7 @@ const useSocksProxy = () => {
     setGlobalProxy,
     toggleHostProxy,
     toggleCustomProxy,
-    toggleCustomProxyDNS,
     toggleGlobalProxy,
-    toggleGlobalProxyDNS,
   };
 };
 

@@ -1,49 +1,26 @@
 import { Recommendation } from './Recommendation.types';
 
+// Chrome Web Store ID of uBlock Origin Lite
+export const UBOL_ID = 'ddkjiahejlhfcafbddmgiahcphecmpfh';
+
 export const defaultExtensions: Recommendation[] = [
   {
     type: 'extension',
-    id: 'uBlock0@raymondhill.net',
-    name: 'Install uBlock Origin',
-    description: `uBlock Origin is not just a free and open-source “ad blocker“, it's a very efficient content blocker consuming minimal resources.`,
-    homeUrl: 'https://github.com/gorhill/uBlock',
+    id: UBOL_ID,
+    name: 'Install uBlock Origin Lite',
+    description: `uBlock Origin Lite is a free and open-source, permission-less content blocker built for Manifest V3, consuming minimal resources.`,
+    homeUrl: 'https://github.com/uBlockOrigin/uBOL-home',
     icon: 'ubo64.png',
     enabled: false,
     installed: false,
     activated: false,
     ignored: false,
     ctaLabel: 'install',
-    ctaUrl: 'https://addons.mozilla.org/firefox/addon/ublock-origin/',
+    ctaUrl: `https://chromewebstore.google.com/detail/ublock-origin-lite/${UBOL_ID}`,
   },
 ];
 
-export const defaultSettings: Recommendation[] = [
-  {
-    type: 'setting',
-    id: 'https-only-mode',
-    name: 'Use HTTPS-only mode',
-    description:
-      'Enabling HTTPS-only mode makes sure all of your connections are encrypted with HTTPS, and warn you if only HTTP unsafe mode is available.',
-    homeUrl:
-      'https://support.mozilla.org/en-US/kb/https-only-prefs#w_enabledisable-https-only-mode',
-    activated: false,
-    ignored: false,
-    ctaLabel: undefined,
-  },
-  {
-    type: 'setting',
-    id: 'default-search',
-    name: 'Use a privacy friendly search engine',
-    description: 'We recommend using a privacy friendly search engine, like DuckDuckGo.',
-    homeUrl:
-      'https://mullvad.net/en/blog/2021/2/24/dont-duck-the-issue-consider-your-privacy-and-search-engines/',
-    activated: false,
-    ignored: false,
-    ctaLabel: undefined,
-  },
-];
-
-export const defaultRecommendations = [...defaultExtensions, ...defaultSettings];
+export const defaultRecommendations = [...defaultExtensions];
 
 export const isRecommended = (id: string) => {
   return defaultRecommendationsIds.includes(id);
