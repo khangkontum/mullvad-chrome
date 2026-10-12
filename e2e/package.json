@@ -1,0 +1,16 @@
+{
+  "name": "mullvad-browser-extension-e2e",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end tests of the Chrome MV3 extension against real Mullvad servers",
+  "scripts": {
+    "tunnel:up": "python3 tunnel.py up se-sto",
+    "tunnel:down": "python3 tunnel.py down",
+    "tunnel:deregister": "python3 tunnel.py deregister",
+    "test": "./ns.sh node chrome.e2e.mjs",
+    "demo": "./ns.sh node demo.mjs && ./burn-captions.sh"
+  },
+  "dependencies": {
+    "playwright": "^1.64.0"
+  }
+}

@@ -1,0 +1,9 @@
+# secrets: Mullvad account number and WireGuard key/device
+.env
+wg/
+node_modules/
+# large/raw recordings
+artifacts/demo/demo-raw.mp4
+artifacts/demo/frames/
+artifacts/video/
+artifacts/demo/*.mp4

@@ -1,0 +1,196 @@
+{
+  "exitIp": {
+    "CH": "193.32.127.170",
+    "JP": "138.199.21.240",
+    "US": "23.165.56.95",
+    "DE": "185.213.155.190"
+  },
+  "wgExit": "45.130.200.104",
+  "results": [
+    {
+      "name": "optional permissions granted (tabs + <all_urls>) via native prompt",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "baseline exit is Mullvad WireGuard (netns tunnel)",
+      "ok": true,
+      "detail": "45.130.200.104 se-sto-wg-001 Sweden"
+    },
+    {
+      "name": "no rules → extension does not take over proxy settings",
+      "ok": true,
+      "detail": "{\"levelOfControl\":\"controllable_by_this_extension\",\"value\":{\"mode\":\"system\"}}"
+    },
+    {
+      "name": "global proxy CH → exit ch-zrh-wg-socks5-001",
+      "ok": true,
+      "detail": "193.32.127.170 Switzerland ch-zrh-wg-socks5-001"
+    },
+    {
+      "name": "global proxy JP → exit jp-tyo-wg-socks5-001",
+      "ok": true,
+      "detail": "138.199.21.240 Japan jp-tyo-wg-socks5-001"
+    },
+    {
+      "name": "global proxy US → exit us-nyc-wg-socks5-001",
+      "ok": true,
+      "detail": "23.165.56.95 USA us-nyc-wg-socks5-001"
+    },
+    {
+      "name": "global proxy DE → exit de-fra-wg-socks5-001",
+      "ok": true,
+      "detail": "185.213.155.190 Germany de-fra-wg-socks5-001"
+    },
+    {
+      "name": "PAC applied and controlled by this extension",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "toolbar badge shows proxy country for active tab",
+      "ok": true,
+      "detail": "badge=DE"
+    },
+    {
+      "name": "per-site rule ipinfo.io → Japan",
+      "ok": true,
+      "detail": "138.199.21.240 JP Tokyo"
+    },
+    {
+      "name": "per-site rule ip-api.com → USA",
+      "ok": true,
+      "detail": "23.165.56.95 United States New York"
+    },
+    {
+      "name": "site without rule uses global proxy (CH)",
+      "ok": true,
+      "detail": "ch-zrh-wg-socks5-001"
+    },
+    {
+      "name": "rule on ipify.org applies to api.ipify.org (JP exit IP)",
+      "ok": true,
+      "detail": "138.199.21.240"
+    },
+    {
+      "name": "rule on mullvad.net applies to am.i.mullvad.net (Germany)",
+      "ok": true,
+      "detail": "Germany de-fra-wg-socks5-001"
+    },
+    {
+      "name": "third-party host without rule, embedded in proxied example.com (JP), goes direct",
+      "ok": true,
+      "detail": "api.ipify.org saw 45.130.200.104, expected 45.130.200.104"
+    },
+    {
+      "name": "third-party host with its own rule (ipinfo.io → US) uses that rule",
+      "ok": true,
+      "detail": "{\"ip\":\"23.165.56.95\",\"country\":\"US\"}"
+    },
+    {
+      "name": "third-party host without rule, embedded in proxied example.com (JP), goes via global CH",
+      "ok": true,
+      "detail": "api.ipify.org saw 193.32.127.170, expected 193.32.127.170"
+    },
+    {
+      "name": "third-party host with its own rule (ipinfo.io → US) uses that rule (global on)",
+      "ok": true,
+      "detail": "{\"ip\":\"23.165.56.95\",\"country\":\"US\"}"
+    },
+    {
+      "name": "excluded ifconfig.co goes direct despite global + host rule",
+      "ok": true,
+      "detail": "45.130.200.104 Sweden"
+    },
+    {
+      "name": "excluded mullvad.net also excludes am.i.mullvad.net",
+      "ok": true,
+      "detail": "se-sto-wg-001"
+    },
+    {
+      "name": "non-excluded host still uses global CH",
+      "ok": true,
+      "detail": "193.32.127.170"
+    },
+    {
+      "name": "random mode: am.i.mullvad.net exits via a Mullvad SOCKS relay (overrides exclusions)",
+      "ok": true,
+      "detail": "pl-waw-wg-socks5-102"
+    },
+    {
+      "name": "random mode: stable pick per site",
+      "ok": true,
+      "detail": "pl-waw-wg-socks5-102; ifconfig.co 2607:9000:2000:43::d001"
+    },
+    {
+      "name": "random mode: sites spread over different relays",
+      "ok": true,
+      "detail": "am.i Poland, ipinfo FR, ifconfig United States"
+    },
+    {
+      "name": "service worker stopped via chrome://serviceworker-internals (1)",
+      "ok": true,
+      "detail": "STOPPED"
+    },
+    {
+      "name": "after SW restart: random pick unchanged (seed kept in storage.session)",
+      "ok": true,
+      "detail": "pl-waw-wg-socks5-102"
+    },
+    {
+      "name": "service worker stopped via chrome://serviceworker-internals (2)",
+      "ok": true,
+      "detail": "STOPPED"
+    },
+    {
+      "name": "service worker was woken up again by the storage event",
+      "ok": true,
+      "detail": "RUNNING"
+    },
+    {
+      "name": "after SW stop: new PAC from the woken worker applies (JP)",
+      "ok": true,
+      "detail": "jp-tyo-wg-socks5-001"
+    },
+    {
+      "name": "DNS leak test (global CH): all resolvers are Mullvad",
+      "ok": true,
+      "detail": "ch-zrh-wg-001 (Switzerland, mullvad_dns=true)"
+    },
+    {
+      "name": "WebRTC unrestricted: STUN reveals the non-proxied exit IP (leak exists)",
+      "ok": true,
+      "detail": "1 srflx candidate(s)"
+    },
+    {
+      "name": "WebRTC toggle sets webRTCIPHandlingPolicy=disable_non_proxied_udp",
+      "ok": true,
+      "detail": "{\"levelOfControl\":\"controlled_by_this_extension\",\"value\":\"disable_non_proxied_udp\"}"
+    },
+    {
+      "name": "WebRTC restricted: no candidate exposes an IP",
+      "ok": true,
+      "detail": "0 candidate(s)"
+    },
+    {
+      "name": "WebRTC toggle back on restores default policy",
+      "ok": true,
+      "detail": "default"
+    },
+    {
+      "name": "popup connection check shows the proxied exit (Switzerland)",
+      "ok": true,
+      "detail": "Proxy | VPN | DNS |  | Zurich, Switzerland |  | IP193.32.127.170 / 2a03:1b20:a:f011:6::d001 | Provider31173"
+    },
+    {
+      "name": "removing all rules clears proxy settings",
+      "ok": true,
+      "detail": "system"
+    },
+    {
+      "name": "back to direct WireGuard exit",
+      "ok": true,
+      "detail": "se-sto-wg-001"
+    }
+  ]
+}
