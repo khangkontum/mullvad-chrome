@@ -55,19 +55,31 @@ The service worker can be inspected from `chrome://extensions` ("Inspect views: 
 - **Proxy**: Chrome has no `proxy.onRequest`, so the stored state (`globalProxy`, `hostProxies`,
   `excludedHosts`, `randomProxyMode`) is compiled into a PAC script
   (`src/helpers/socksProxy/pac.ts`) and applied with `chrome.proxy.settings` (mandatory, so a broken
-  PAC never falls back to a direct connection). It is re-applied whenever that storage changes,
-  permissions change, or the worker starts. When nothing is configured, the extension releases the
-  proxy setting. Routing order: local/reserved addresses direct → random mode → excluded host →
-  host/parent-domain proxy → global proxy → direct. Rules are matched against the requested host, so
+  PAC never falls back to a direct connection). It is re-applied whenever that storage changes or
+  the worker starts, independently of the optional `tabs`/`<all_urls>` permissions (those only drive
+  the per-tab UI). When nothing is configured, the extension releases the proxy setting. Routing
+  order: local/reserved addresses direct → random mode → excluded host → host/parent-domain proxy →
+  global proxy → direct. Rules are matched against the requested host (lowercase/punycode), so
   third-party content follows its own host's rule.
-- **Random mode**: the PAC picks a relay from a hash of a per-session seed (kept in
-  `chrome.storage.session`) and the site, so the pick is stable for a site and its subdomains for
-  the browser session and rotates on browser restart. The site is approximated without the Public
-  Suffix List (last two labels, or three for common `co.uk`-style suffixes).
+- **Fail closed**: proxies are validated (SOCKS/SOCKS5 only, hostname or IP literal, port 1-65535).
+  An enabled rule with an invalid proxy blocks its traffic instead of going direct; corrupted stored
+  settings make the extension block all traffic until they are fixed or reset. Imported settings
+  files are validated and rejected as a whole if anything is invalid.
+- **Control check**: after applying, the extension verifies through `chrome.proxy.settings.get` that
+  its PAC script is the one in effect, and re-checks on `proxy.settings.onChange`. If another
+  extension or a policy controls the proxy settings, the popup and options page show a warning and
+  the toolbar badge shows `!`; the extension re-applies its settings when control is released.
+- **Random mode**: relays are picked per site with rendezvous hashing over a per-session seed (kept
+  in `chrome.storage.session`) and the relay hostnames, so the pick is stable for a site and its
+  subdomains for the browser session and only changes if that relay leaves the list. It rotates on
+  browser restart. The site is approximated without the Public Suffix List (last two labels, or
+  three for common `co.uk`-style suffixes). Until the relay list is loaded, everything except
+  `api.mullvad.net` (needed to load the list) is blocked.
 - **DNS**: Chrome always resolves hostnames on the proxy for SOCKS5, so there is no "Proxy DNS"
   toggle.
 - **WebRTC**: the WebRTC switch sets `privacy.network.webRTCIPHandlingPolicy` to
-  `disable_non_proxied_udp` (Chrome can't disable WebRTC entirely).
+  `disable_non_proxied_udp` (Chrome can't disable WebRTC entirely). The switch reflects the real
+  browser setting and is disabled, with a warning, when another extension or a policy controls it.
 
 ### Known limitations
 
@@ -75,6 +87,11 @@ The service worker can be inspected from `chrome://extensions` ("Inspect views: 
   through the **active tab's** proxy, since a PAC script doesn't know which tab or extension a
   request comes from. They follow the rules for `mullvad.net` itself: the global proxy (or random
   mode / a `mullvad.net` rule), not a per-site proxy of the current tab.
+- **Incognito**: Chrome only applies an extension's proxy settings to Incognito windows when the
+  extension is allowed in Incognito (off by default). Without it, Incognito traffic is not proxied;
+  the popup and options page show a warning with a shortcut to the extension settings.
+- Another extension or a policy can override the proxy settings at any time; this is detected and
+  shown, but can't be prevented.
 - Firefox-only features were removed: HTTPS-only mode and default search engine recommendations.
 
 ## Permissions
