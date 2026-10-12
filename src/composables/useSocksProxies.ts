@@ -28,7 +28,7 @@ const getSocksProxies = async () => {
   try {
     const response = await fetch(SOCKS_API_URL);
     const data: SocksProxy[] = await response.json();
-    flatProxiesList.value = data
+    const list = data
       .filter((proxy: SocksProxy) => {
         return proxy.online && proxy.ipv4_address && proxy.hostname;
       })
@@ -38,6 +38,10 @@ const getSocksProxies = async () => {
           .replace('.relays.mullvad.net', '');
         return proxy;
       });
+    // Avoid rewriting an identical list (each write rebuilds the PAC script)
+    if (JSON.stringify(list) !== JSON.stringify(flatProxiesList.value)) {
+      flatProxiesList.value = list;
+    }
   } catch (e: unknown) {
     isError.value = true;
 

@@ -5,15 +5,19 @@ import Button from '@/components/Buttons/Button.vue';
 import CustomProxies from '@/components/Proxy/CustomProxies.vue';
 import IconLabel from '@/components/IconLabel.vue';
 import LocationDrawer from '@/components/LocationDrawer.vue';
+import ProxyStatusWarnings from '@/components/Proxy/ProxyStatusWarnings.vue';
 import ProxyAutoReload from '@/components/Proxy/ProxyAutoReload.vue';
 import RandomProxyMode from '@/components/Proxy/RandomProxyMode.vue';
 import TitleCategory from '@/components/TitleCategory.vue';
 
 import useProxyPermissions from '@/composables/useProxyPermissions';
+import useProxyStatus from '@/composables/useProxyStatus';
 const { isGranted, requestPermissions } = useProxyPermissions();
+const { proxyStatus } = useProxyStatus();
 </script>
 
 <template>
+  <ProxyStatusWarnings />
   <template v-if="isGranted">
     <CustomProxies />
     <ProxyAutoReload class="mt-4" />
@@ -33,6 +37,11 @@ const { isGranted, requestPermissions } = useProxyPermissions();
           <li>- <strong>&lt;all_urls&gt;</strong> to have granular proxy settings</li>
         </ul>
       </IconLabel>
+
+      <p v-if="proxyStatus.active" class="mt-2">
+        Your proxy settings are still applied; these permissions are only needed to manage them per
+        site.
+      </p>
 
       <Button class="mt-3" @click="requestPermissions"> Grant permissions </Button>
     </n-card>

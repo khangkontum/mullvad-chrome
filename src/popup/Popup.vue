@@ -3,6 +3,7 @@ import { computed } from 'vue';
 
 import ConnectionCheck from '@/components/ConnectionCheck/ConnectionCheck.vue';
 import PopupProxyPanel from '@/components/Proxy/PopupProxyPanel.vue';
+import ProxyStatusWarnings from '@/components/Proxy/ProxyStatusWarnings.vue';
 import LocationDrawer from '@/components/LocationDrawer.vue';
 import NotificationsCarousel from '@/components/NotificationsCarousel.vue';
 import PopupHeader from '@/components/PopupHeader.vue';
@@ -48,6 +49,7 @@ const isProxyInUse = computed(
       :isMullvadDoh
       :isProxyInUse
     />
+    <ProxyStatusWarnings />
     <PopupProxyPanel />
     <LocationDrawer />
     <NotificationsCarousel />

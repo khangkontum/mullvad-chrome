@@ -39,8 +39,10 @@ const {
 } = useSocksProxy();
 import useSocksProxies from '@/composables/useSocksProxies';
 import useStore from '@/composables/useStore';
+import useProxyStatus from '@/composables/useProxyStatus';
 
 const { globalProxyDetails } = useStore();
+const { proxyStatus } = useProxyStatus();
 const { getSocksProxies } = useSocksProxies();
 
 const isCurrentHostProxyOverriden = computed(() => randomProxyMode.value);
@@ -52,7 +54,8 @@ const isAllWebsitesProxyOverriden = computed(() =>
 );
 
 watchEffect(() => {
-  if (isGranted.value) {
+  // random mode needs the relay list even before it was ever loaded (traffic is blocked until then)
+  if (isGranted.value || randomProxyMode.value) {
     getSocksProxies();
   }
 });
@@ -279,6 +282,11 @@ watchEffect(() => {
           proxy settings
         </li>
       </ul>
+
+      <p v-if="proxyStatus.active" class="mt-2">
+        Your proxy settings are still applied; these permissions are only needed to manage them per
+        site.
+      </p>
 
       <Button size="small" class="mt-3" @click="requestPermissions"> Grant permissions </Button>
     </div>
