@@ -48,7 +48,8 @@ npm run tunnel:deregister  # remove the WireGuard key/device from the account
 - random mode: Mullvad relay per site, stable per site, different sites spread over relays
 - service worker stopped via `chrome://serviceworker-internals`: the random pick survives a restart,
   and a storage change wakes the worker which applies the new PAC
-- DNS leak check: all resolvers are Mullvad
+- DNS leak check: all resolvers are Mullvad (the test profile uses Mullvad DoH, seeded in `lib.mjs`,
+  since proxied sites are resolved locally)
 - WebRTC: STUN exposes the non-proxied exit by default; the extension's toggle sets
   `webRTCIPHandlingPolicy=disable_non_proxied_udp` and no IP is exposed anymore
 - popup connection check shows the proxied exit

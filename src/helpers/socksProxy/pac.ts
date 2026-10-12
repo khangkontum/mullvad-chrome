@@ -54,6 +54,7 @@ export type CompiledPac = {
 };
 
 // Returned when a proxy is required but can't be used: fail closed instead of going direct.
+// Intentionally SOCKS5 (unlike toPacProxy): it never does a local DNS lookup for the blocked site.
 export const PAC_BLOCK = 'SOCKS5 127.0.0.1:9';
 
 // The Mullvad API must stay reachable in random mode before the relay list is known,
@@ -74,7 +75,8 @@ export const toPacProxy = (proxy?: Partial<ProxyInfo>): string | null => {
   // or DoH) and sends the IP to the relay. With "SOCKS5" Chrome always leaves DNS to the relay,
   // and Mullvad relay resolvers intermittently fail (SERVFAIL/timeouts) for some domains, which
   // breaks those sites (e.g. x.com's twimg.com CDN) while they work without the proxy.
-  // Mullvad relays accept SOCKS4; IPv6-only sites can't be reached through it.
+  // Mullvad relays accept SOCKS4. Chrome then only looks up A records, so IPv6-only sites and
+  // IPv6-literal URLs can't be reached through the proxy.
   return `SOCKS ${host.includes(':') ? `[${host}]` : host}:${proxy.port}`;
 };
 

@@ -66,10 +66,10 @@ The service worker can be inspected from `chrome://extensions` ("Inspect views: 
   order: local/reserved addresses direct → random mode → excluded host → host/parent-domain proxy →
   global proxy → direct. Rules are matched against the requested host (lowercase/punycode), so
   third-party content follows its own host's rule.
-- **Fail closed**: proxies are validated (SOCKS/SOCKS5 only, hostname or IP literal, port 1-65535).
-  An enabled rule with an invalid proxy blocks its traffic instead of going direct; corrupted stored
-  settings make the extension block all traffic until they are fixed or reset. Imported settings
-  files are validated and rejected as a whole if anything is invalid.
+- **Fail closed**: proxies are validated (type `socks`/`socks4`, emitted as PAC `SOCKS`; hostname or
+  IP literal, port 1-65535). An enabled rule with an invalid proxy blocks its traffic instead of
+  going direct; corrupted stored settings make the extension block all traffic until they are fixed
+  or reset. Imported settings files are validated and rejected as a whole if anything is invalid.
 - **Control check**: after applying, the extension verifies through `chrome.proxy.settings.get` that
   its PAC script is the one in effect, and re-checks on `proxy.settings.onChange`. If another
   extension or a policy controls the proxy settings, the popup and options page show a warning and
@@ -84,17 +84,20 @@ The service worker can be inspected from `chrome://extensions` ("Inspect views: 
   own resolver and sends the IP to the relay. With `SOCKS5` Chrome always leaves DNS to the relay,
   and Mullvad relay resolvers intermittently fail (SERVFAIL/timeouts) for some domains (e.g.
   kleinanzeigen.de, x.com's `twimg.com` CDN), breaking sites that work without the proxy. Use
-  Mullvad DNS (VPN app or DoH) so lookups stay private. IPv6-only sites can't be proxied.
+  Mullvad DNS (VPN app or DoH) so lookups stay private: DNS privacy now depends on the local
+  resolver. IPv6-only sites and IPv6-literal URLs can't be proxied (Chrome's SOCKS4 only looks up A
+  records).
 - **WebRTC**: the WebRTC switch sets `privacy.network.webRTCIPHandlingPolicy` to
   `disable_non_proxied_udp` (Chrome can't disable WebRTC entirely). The switch reflects the real
   browser setting and is disabled, with a warning, when another extension or a policy controls it.
 
 ### Known limitations
 
-- The extension's own connection check (`am.i.mullvad.net`) and DNS leak check can't be forced
-  through the **active tab's** proxy, since a PAC script doesn't know which tab or extension a
-  request comes from. They follow the rules for `mullvad.net` itself: the global proxy (or random
-  mode / a `mullvad.net` rule), not a per-site proxy of the current tab.
+- The extension's own connection check (`am.i.mullvad.net`) can't be forced through the **active
+  tab's** proxy, since a PAC script doesn't know which tab or extension a request comes from. It
+  follows the rules for `mullvad.net` itself: the global proxy (or random mode / a `mullvad.net`
+  rule), not a per-site proxy of the current tab. The DNS leak check reports the browser's own
+  resolver, which is what proxied sites use.
 - **Incognito**: Chrome only applies an extension's proxy settings to Incognito windows when the
   extension is allowed in Incognito (off by default). Without it, Incognito traffic is not proxied;
   the popup and options page show a warning with a shortcut to the extension settings.

@@ -7,6 +7,7 @@ import {
   compilePacRules,
   PAC_BLOCK,
   ProxyState,
+  toPacProxy,
 } from '@/helpers/socksProxy/pac';
 import { ProxyInfoType } from '@/helpers/socksProxy/socksProxy.types';
 import type { SocksProxy } from '@/helpers/socksProxy/socksProxies.types';
@@ -42,6 +43,31 @@ const evalPac = (script: string, url: string) => {
 };
 const runPac = (state: ProxyState, url: string) =>
   evalPac(buildPacScript(compilePacRules(state).rules), url);
+
+describe('PAC: local DNS resolution', () => {
+  // SOCKS5 would leave DNS to the Mullvad relay, whose resolvers intermittently fail for some
+  // domains; SOCKS (SOCKS4) makes Chrome resolve locally and send the IP to the relay.
+  it('emits SOCKS (not SOCKS5) for socks and socks4 proxies, regardless of proxyDNS', () => {
+    expect(toPacProxy(socks('10.124.0.1'))).toBe('SOCKS 10.124.0.1:1080');
+    expect(toPacProxy({ ...socks('10.124.0.1'), proxyDNS: false })).toBe('SOCKS 10.124.0.1:1080');
+    expect(toPacProxy({ ...socks('10.124.0.1'), type: ProxyInfoType.socks4 })).toBe(
+      'SOCKS 10.124.0.1:1080',
+    );
+  });
+
+  it('keeps the block result SOCKS5, so blocked sites never trigger a local lookup', () => {
+    expect(PAC_BLOCK).toMatch(/^SOCKS5 /);
+  });
+
+  it('still routes IPv6-literal URLs to the proxy (unreachable via SOCKS4, never direct)', () => {
+    const state: ProxyState = {
+      ...baseState,
+      globalProxy: socks('10.124.0.1'),
+      globalProxyDetails: { socksEnabled: true },
+    };
+    expect(runPac(state, 'http://[2001:db8::1]/')).toBe('SOCKS 10.124.0.1:1080');
+  });
+});
 
 describe('PAC: per-domain rules apply to the requested host', () => {
   it('proxies a request to a host with a proxy rule (e.g. a third-party subresource)', () => {

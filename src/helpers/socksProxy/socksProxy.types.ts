@@ -10,7 +10,7 @@ export type ProxyInfo = {
   type: ProxyInfoType;
   host: string;
   port: number;
-  proxyDNS?: boolean; // only if type is 'socks' or 'socks4'
+  proxyDNS?: boolean; // Firefox only; ignored in Chrome (PAC "SOCKS" always resolves locally)
 
   /*
   This is the full type of ProxyInfo,

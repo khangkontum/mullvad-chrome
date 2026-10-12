@@ -38,7 +38,7 @@ export const warnings: Recommendation[] = [
     id: 'dns-leak',
     type: 'warning',
     name: 'DNS leaks have been detected',
-    description: `You're connected to Mullvad VPN, but some DNS requests are leaking outside the VPN tunnel.`,
+    description: `You're connected to Mullvad VPN, but some DNS requests are leaking outside the VPN tunnel. Proxied sites are resolved by your browser's DNS, so use Mullvad DNS.`,
     ctaUrl: 'https://mullvad.net/en/help/dns-leaks/',
     iconType: 'leak',
     activated: false,

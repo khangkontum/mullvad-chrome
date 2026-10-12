@@ -98,10 +98,21 @@ const proxySettings = () => extPage.evaluate(() => chrome.proxy.settings.get({})
 const page = await context.newPage();
 const getJSON = async (url, attempt = 0) => {
   const sep = url.includes('?') ? '&' : '?';
-  const res = await page.goto(`${url}${sep}_=${Date.now()}`, {
-    waitUntil: 'domcontentloaded',
-    timeout: 30000,
-  });
+  let res;
+  try {
+    res = await page.goto(`${url}${sep}_=${Date.now()}`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000,
+    });
+  } catch (e) {
+    // secure DNS (DoH) can briefly fail right after browser start
+    if (attempt < 2 && String(e).includes('ERR_NAME_NOT_RESOLVED')) {
+      log(`name not resolved for ${url}, retrying`);
+      await sleep(2000);
+      return getJSON(url, attempt + 1);
+    }
+    throw e;
+  }
   // third-party IP echo services occasionally rate-limit shared exit IPs
   if (res.status() === 429 && attempt < 2) {
     log(`429 from ${url}, retrying`);
