@@ -2,17 +2,15 @@
 
 # Mullvad Browser Extension
 
-Mullvad Browser Extension is a Firefox extension improving your browser experience while using
-Mullvad VPN. It also displays information about the connection, recommends optimal DNS settings, and
-a one-click access to [proxy servers](https://mullvad.net/en/help/socks5-proxy/).
+This is a **Chrome (Manifest V3)** port of the Mullvad Browser Extension, improving your browser
+experience while using Mullvad VPN. It displays information about the connection, checks for DNS and
+WebRTC leaks, and gives one-click access to
+[proxy servers](https://mullvad.net/en/help/socks5-proxy/) (globally, per site, or a random proxy
+per site).
 
-## Download
-
-You can visit our [download page](https://mullvad.net/en/download/browser/extension) to get the
-latest release.
-
-The extension is also available here on Github in the
-[Releases](https://github.com/mullvad/browser-extension/releases).
+Mullvad ships the official extension for Firefox / Mullvad Browser
+([download page](https://mullvad.net/en/download/browser/extension)); this codebase only targets
+Chromium-based browsers.
 
 ## Development
 
@@ -23,73 +21,78 @@ Build with:
 - Node 24 LTS
 - Npm 11
 
-_If you use `nvm`, run `nvm use` to automatically set these versions._
-
 For:
 
-- Firefox: last version (>91.1.0)
+- Chrome / Chromium 120 or newer
 
 ### **Developing**
 
 The first time, use `npm install` to install the necessary packages.
 
-To start the extension in a a temporary and clean browser:
+- use `npm run dev` to rebuild the extension into `extension/` whenever changes are saved
+- load `extension/` as an unpacked extension (`chrome://extensions` > Developer mode > "Load
+  unpacked"), or use `npm start` to launch a throwaway Chromium profile with it loaded, and click
+  the reload button on `chrome://extensions` after a rebuild.
 
-- use `npm run dev` to automatically rebuild the extension when changes are saved.
-- use `npm start` in another terminal to start a development instance of Firefox with the extension
-  loaded. The extension will automatically reload when changes are saved.
-
-The developer tools can be started by clicking on the `inspect` in the debugging tab (automatically
-opened).
+The service worker can be inspected from `chrome://extensions` ("Inspect views: service worker").
 
 ### **Building**
 
-- use `npm run build` to build the extension **first**
-- use `npm run pack:xpi` to create `.xpi` file in the root folder
+- use `npm run build` to build the extension into `extension/`
+- use `npm run pack` to create a `.zip` ready for the Chrome Web Store
 
-_There are other build options which you can view in `package.json`._
+### **Tests**
 
-### **Testing the extension in your browser**
+- `npm test` runs the unit tests (vitest), including tests that evaluate the generated PAC script.
+- `e2e/` contains the end-to-end setup used to test the extension against real Mullvad servers (see
+  `e2e/README.md`).
 
-You can only install the extension temporarily when it is not signed by Mozilla. To do so:
+## Architecture notes (Chrome)
 
-- open Firefox
-- enter "about:debugging#/runtime/this-firefox" in the URL bar
-- click "Load Temporary Add-on"
-- open `extension.xpi` file.
+- **Background**: a module service worker (`src/background/main.ts`), built separately from the Vue
+  pages and without any Vue/DOM dependency. All listeners are registered synchronously at the top
+  level so Chrome can wake the worker for them.
+- **Proxy**: Chrome has no `proxy.onRequest`, so the stored state (`globalProxy`, `hostProxies`,
+  `excludedHosts`, `randomProxyMode`) is compiled into a PAC script
+  (`src/helpers/socksProxy/pac.ts`) and applied with `chrome.proxy.settings` (mandatory, so a broken
+  PAC never falls back to a direct connection). It is re-applied whenever that storage changes,
+  permissions change, or the worker starts. When nothing is configured, the extension releases the
+  proxy setting. Routing order: local/reserved addresses direct → random mode → excluded host →
+  host/parent-domain proxy → global proxy → direct. Rules are matched against the requested host, so
+  third-party content follows its own host's rule.
+- **Random mode**: the PAC picks a relay from a hash of a per-session seed (kept in
+  `chrome.storage.session`) and the site, so the pick is stable for a site and its subdomains for
+  the browser session and rotates on browser restart. The site is approximated without the Public
+  Suffix List (last two labels, or three for common `co.uk`-style suffixes).
+- **DNS**: Chrome always resolves hostnames on the proxy for SOCKS5, so there is no "Proxy DNS"
+  toggle.
+- **WebRTC**: the WebRTC switch sets `privacy.network.webRTCIPHandlingPolicy` to
+  `disable_non_proxied_udp` (Chrome can't disable WebRTC entirely).
 
-The extension will automatically unload when Firefox is closed.
+### Known limitations
 
-### **Testing restart and persisting features**
-
-You can use the `restart` script to test restart and persisting features (like settings saved to
-local storage). It will require some manual configuration:
-
-- go to `about:profiles` and create a new Firefox profile
-- go to `package.json` and change the `restart` script with your own Firefox profile path
-- go to `about:config` and set both `extensions.webextensions.keepStorageOnUninstall` and
-  `extensions.webextensions.keepUuidOnUninstall` to `true`.
-
-[Learn more](https://extensionworkshop.com/documentation/develop/testing-persistent-and-restart-features/)
+- The extension's own connection check (`am.i.mullvad.net`) and DNS leak check can't be forced
+  through the **active tab's** proxy, since a PAC script doesn't know which tab or extension a
+  request comes from. They follow the rules for `mullvad.net` itself: the global proxy (or random
+  mode / a `mullvad.net` rule), not a per-site proxy of the current tab.
+- Firefox-only features were removed: HTTPS-only mode and default search engine recommendations.
 
 ## Permissions
 
 Mullvad Browser Extension requires the following permissions:
 
 - `management` to be able to recommend third party extensions
-- `privacy` to disable webRTC and check HTTPS-Only status
+- `privacy` to restrict WebRTC
+- `proxy` to configure and use Mullvad proxy servers (can't be optional on Chrome; proxy settings
+  are only changed once the optional permissions below are granted)
 - `storage` to save preferences
-- `search` to recommend other search engines
 - `*://*.mullvad.net/*` to get proxy servers list and display your connection information (See
   `Network requests` for details)
 
 The following permissions are optional, but are needed to use the proxy feature:
 
-- `proxy` to configure and use Mullvad proxy servers
 - `tabs` to show proxy settings from active tab
-- `<all_urls>` to specify a proxy configuration per domain (each request needs to be intercepted)
-
-_Permissions are automatically accepted when testing the extension._
+- `<all_urls>` (optional host permission) to specify a proxy configuration per domain
 
 ## Network requests
 
