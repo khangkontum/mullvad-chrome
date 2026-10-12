@@ -48,8 +48,8 @@ export const warnings: Recommendation[] = [
   {
     id: 'webrtc-leak',
     type: 'warning',
-    name: 'WebRTC leaks have been detected',
-    description: `WebRTC is leaking some internal IPs.`,
+    name: 'WebRTC can bypass the proxy',
+    description: `WebRTC is unrestricted, so websites can see your non-proxied IP. Restrict it in the settings.`,
     ctaUrl: '',
     iconType: 'leak',
     activated: false,

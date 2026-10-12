@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import vm from 'node:vm';
 
 import {
@@ -59,13 +59,39 @@ describe('PAC: local DNS resolution', () => {
     expect(PAC_BLOCK).toMatch(/^SOCKS5 /);
   });
 
-  it('still routes IPv6-literal URLs to the proxy (unreachable via SOCKS4, never direct)', () => {
-    const state: ProxyState = {
-      ...baseState,
-      globalProxy: socks('10.124.0.1'),
-      globalProxyDetails: { socksEnabled: true },
-    };
-    expect(runPac(state, 'http://[2001:db8::1]/')).toBe('SOCKS 10.124.0.1:1080');
+  const globalState: ProxyState = {
+    ...baseState,
+    globalProxy: socks('10.124.0.1'),
+    globalProxyDetails: { socksEnabled: true },
+  };
+  const runWithDns = (state: ProxyState, url: string, resolve: (h: string) => string | null) => {
+    const context = vm.createContext({ dnsResolve: resolve });
+    vm.runInContext(buildPacScript(compilePacRules(state).rules), context);
+    return context.FindProxyForURL(url, new URL(url).hostname) as string;
+  };
+
+  it('uses SOCKS5 (relay DNS) for IPv6-literal URLs', () => {
+    expect(runPac(globalState, 'http://[2001:db8::1]/')).toBe('SOCKS5 10.124.0.1:1080');
+  });
+
+  it('falls back to SOCKS5 per host when the local resolver fails', () => {
+    const resolve = (h: string) => (h === 'broken.example' ? null : '93.184.216.34');
+    expect(runWithDns(globalState, 'https://broken.example/', resolve)).toBe(
+      'SOCKS5 10.124.0.1:1080',
+    );
+    expect(runWithDns(globalState, 'https://fine.example/', resolve)).toBe('SOCKS 10.124.0.1:1080');
+    // IPv4 literals need no lookup
+    expect(runWithDns(globalState, 'http://93.184.216.34/', () => null)).toBe(
+      'SOCKS 10.124.0.1:1080',
+    );
+  });
+
+  it('never resolves hosts that are blocked or go direct', () => {
+    const resolve = vi.fn(() => null);
+    const state: ProxyState = { ...globalState, globalProxy: {} };
+    expect(runWithDns(state, 'https://blocked.example/', resolve)).toBe(PAC_BLOCK);
+    expect(runWithDns(baseState, 'https://direct.example/', resolve)).toBe('DIRECT');
+    expect(resolve).not.toHaveBeenCalled();
   });
 });
 

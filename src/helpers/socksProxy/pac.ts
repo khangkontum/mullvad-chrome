@@ -75,8 +75,8 @@ export const toPacProxy = (proxy?: Partial<ProxyInfo>): string | null => {
   // or DoH) and sends the IP to the relay. With "SOCKS5" Chrome always leaves DNS to the relay,
   // and Mullvad relay resolvers intermittently fail (SERVFAIL/timeouts) for some domains, which
   // breaks those sites (e.g. x.com's twimg.com CDN) while they work without the proxy.
-  // Mullvad relays accept SOCKS4. Chrome then only looks up A records, so IPv6-only sites and
-  // IPv6-literal URLs can't be reached through the proxy.
+  // Mullvad relays accept SOCKS4. The PAC falls back to SOCKS5 (relay DNS) for hosts the local
+  // resolver can't resolve to IPv4, see withDnsFallback.
   return `SOCKS ${host.includes(':') ? `[${host}]` : host}:${proxy.port}`;
 };
 
@@ -215,6 +215,19 @@ function findRule(list, host) {
   return null;
 }
 
+// "SOCKS" (SOCKS4) needs the site's IPv4 address locally. If the local resolver can't provide one
+// (resolver failure, IPv6-only site or IPv6 literal), fall back to "SOCKS5" for that host only, so
+// the relay resolves it. Checked per host in the PAC (not a "SOCKS; SOCKS5" list, which Chrome
+// would apply to all hosts for 5 minutes after one failure).
+function withDnsFallback(p, host) {
+  if (!p || p.indexOf('SOCKS ') !== 0) return p;
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) return p;
+  var relay = 'SOCKS5 ' + p.slice(6);
+  if (host.indexOf(':') !== -1) return relay;
+  if (typeof dnsResolve !== 'function') return p;
+  return dnsResolve(host) ? p : relay;
+}
+
 function FindProxyForURL(url, rawHost) {
   var host = String(rawHost).toLowerCase();
   if (host.charAt(0) === '[') host = host.slice(1, -1);
@@ -226,7 +239,7 @@ function FindProxyForURL(url, rawHost) {
   // 2. Random mode overrides everything else, stable per site for the browser session
   if (RULES.random) {
     if (!RULES.randomList.length) return host === RELAY_LIST_HOST ? 'DIRECT' : PAC_BLOCK;
-    return pickRandom(siteOf(host));
+    return withDnsFallback(pickRandom(siteOf(host)), host);
   }
 
   // 3. Never proxy
@@ -234,10 +247,10 @@ function FindProxyForURL(url, rawHost) {
 
   // 4. Host / parent domain proxy
   var hostRule = findRule(RULES.hosts, host);
-  if (hostRule && hostRule.p) return hostRule.p;
+  if (hostRule && hostRule.p) return withDnsFallback(hostRule.p, host);
 
   // 5. Global proxy
-  if (RULES.global) return RULES.global;
+  if (RULES.global) return withDnsFallback(RULES.global, host);
 
   return 'DIRECT';
 }

@@ -1,8 +1,6 @@
 import { computed, ref } from 'vue';
 
-const webRTCSupported = ref(true);
-const webRTCLeakedIPs = ref([] as string[]);
-const webRTCLeaking = computed(() => (webRTCLeakedIPs.value.length > 0 ? true : false));
+import useStore from '@/composables/useStore';
 
 // Chrome can't disable WebRTC, but with `disable_non_proxied_udp` WebRTC only uses the proxy
 // (UDP is never sent through SOCKS), so no local or public IP is exposed via ICE candidates.
@@ -30,36 +28,20 @@ const readWebRTCPolicy = async () => {
   }
 };
 
-const checkWebRTC = async () => {
-  webRTCSupported.value = typeof RTCPeerConnection !== 'undefined';
-};
+const { globalProxyDetails, hostProxiesDetails, randomProxyMode } = useStore();
+const proxyConfigured = computed(
+  () =>
+    !!globalProxyDetails.value?.socksEnabled ||
+    randomProxyMode.value === true ||
+    Object.values(hostProxiesDetails.value ?? {}).some((d) => d?.socksEnabled),
+);
 
-const checkRTCLeaks = async () => {
-  await checkWebRTC();
-  // Clear the previous results
-  webRTCLeakedIPs.value = [];
-
-  if (webRTCSupported.value) {
-    // Start the leak check
-    const pc = new RTCPeerConnection();
-    const leakedHosts = new Set<string>();
-    pc.onicecandidate = (e) => {
-      if (e.candidate) {
-        const host = e.candidate.candidate.split(' ')[4];
-        const isObfuscated = !host || host.endsWith('.local');
-        if (!isObfuscated) {
-          leakedHosts.add(host);
-        }
-      }
-      if (pc.iceGatheringState === 'complete') {
-        // end of gathering
-        webRTCLeakedIPs.value = [...leakedHosts];
-      }
-    };
-
-    pc.createOffer({ offerToReceiveAudio: true }).then((offer) => pc.setLocalDescription(offer));
-  }
-};
+// WebRTC sends UDP directly, bypassing the SOCKS proxy, so with the default policy websites can
+// learn the non-proxied IP through STUN. This can't be measured from the extension: Chrome
+// doesn't apply webRTCIPHandlingPolicy (nor mDNS host obfuscation) to extension pages, so a
+// RTCPeerConnection here always sees every address. Verified on web pages: with
+// `disable_non_proxied_udp` they gather no candidates at all. So the leak follows the real policy.
+const webRTCLeaking = computed(() => webRTCStatus.value && proxyConfigured.value);
 
 const setWebRTC = async (value: boolean) => {
   if (!webRTCControlledElsewhere.value) {
@@ -75,19 +57,16 @@ const setWebRTC = async (value: boolean) => {
   }
   // reflect what actually happened
   await readWebRTCPolicy();
-  await checkRTCLeaks();
 };
 
 const useWebRtc = () => {
   void readWebRTCPolicy();
-  checkRTCLeaks();
 
   return {
     readWebRTCPolicy,
     setWebRTC,
     webRTCControlledElsewhere,
     webRTCLeaking,
-    webRTCLeakedIPs,
     webRTCLevelOfControl,
     webRTCPolicy,
     webRTCStatus,

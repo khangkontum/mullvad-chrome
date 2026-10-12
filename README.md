@@ -83,13 +83,16 @@ The service worker can be inspected from `chrome://extensions` ("Inspect views: 
 - **DNS**: proxies are emitted as `SOCKS` (SOCKS4), so Chrome resolves hostnames locally with its
   own resolver and sends the IP to the relay. With `SOCKS5` Chrome always leaves DNS to the relay,
   and Mullvad relay resolvers intermittently fail (SERVFAIL/timeouts) for some domains (e.g.
-  kleinanzeigen.de, x.com's `twimg.com` CDN), breaking sites that work without the proxy. Use
-  Mullvad DNS (VPN app or DoH) so lookups stay private: DNS privacy now depends on the local
-  resolver. IPv6-only sites and IPv6-literal URLs can't be proxied (Chrome's SOCKS4 only looks up A
-  records).
+  kleinanzeigen.de, x.com's `twimg.com` CDN), breaking sites that work without the proxy. When the
+  local resolver can't give an IPv4 address for a host (resolver failure, IPv6-only site, IPv6
+  literal), the PAC script falls back to `SOCKS5` for that host only, so the relay resolves it. Use
+  Mullvad DNS (VPN app or DoH) so lookups stay private: DNS privacy depends on the local resolver.
 - **WebRTC**: the WebRTC switch sets `privacy.network.webRTCIPHandlingPolicy` to
   `disable_non_proxied_udp` (Chrome can't disable WebRTC entirely). The switch reflects the real
   browser setting and is disabled, with a warning, when another extension or a policy controls it.
+  WebRTC can't be tested from the extension itself: Chrome applies neither this policy nor mDNS host
+  obfuscation to extension pages. So a leak is reported when WebRTC is unrestricted while a proxy is
+  configured (websites can then learn the non-proxied IP through STUN).
 
 ### Known limitations
 
