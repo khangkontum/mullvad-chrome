@@ -9,7 +9,7 @@ import IconLabel from '@/components/IconLabel.vue';
 import { closePopup } from '@/helpers/browserExtension';
 import useWebRtc from '@/composables/useWebRtc';
 
-const { webRTCStatus } = useWebRtc();
+const { setWebRTC, webRTCControlledElsewhere, webRTCLevelOfControl, webRTCStatus } = useWebRtc();
 const webRTCLabel = ref('Enabled');
 
 watchEffect(() => {
@@ -25,10 +25,25 @@ watchEffect(() => {
       <h2 class="text-lg">WebRTC</h2>
       <n-tooltip>
         <template #trigger>
-          <n-switch v-model:value="webRTCStatus" />
+          <n-switch
+            :value="webRTCStatus"
+            :disabled="webRTCControlledElsewhere"
+            @update:value="setWebRTC"
+          />
         </template>
         <span>{{ webRTCLabel }}</span>
       </n-tooltip>
+    </div>
+
+    <div
+      v-if="webRTCControlledElsewhere"
+      id="webrtc-controlled-elsewhere"
+      class="pt-4 flex items-center"
+    >
+      <IconLabel
+        :text="`The WebRTC setting is ${webRTCLevelOfControl === 'not_controllable' ? 'locked by a policy' : 'controlled by another extension'} and can't be changed here.`"
+        type="warning"
+      />
     </div>
 
     <div class="py-4 flex items-center">

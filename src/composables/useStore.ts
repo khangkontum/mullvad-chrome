@@ -25,7 +25,6 @@ const hostProxiesDetails = useBrowserStorageLocal<ProxyDetailsMap>('hostProxiesD
 const optionsActiveTab = useBrowserStorageLocal<Tab>('optionsActiveTab', Tab.SETTINGS);
 const proxyAutoReload = useBrowserStorageLocal('proxyAutoReload', false);
 const randomProxyMode = useBrowserStorageLocal('randomProxyMode', false);
-const webRTCStatus = useBrowserStorageLocal('webRTCStatus', true);
 
 const useStore = () => {
   return {
@@ -40,7 +39,6 @@ const useStore = () => {
     optionsActiveTab,
     proxyAutoReload,
     randomProxyMode,
-    webRTCStatus,
   };
 };
 

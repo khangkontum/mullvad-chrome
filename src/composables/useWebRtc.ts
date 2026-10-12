@@ -1,8 +1,4 @@
-import { computed, ref, watch } from 'vue';
-
-import useStore from './useStore';
-
-const { webRTCStatus } = useStore();
+import { computed, ref } from 'vue';
 
 const webRTCSupported = ref(true);
 const webRTCLeakedIPs = ref([] as string[]);
@@ -10,7 +6,29 @@ const webRTCLeaking = computed(() => (webRTCLeakedIPs.value.length > 0 ? true : 
 
 // Chrome can't disable WebRTC, but with `disable_non_proxied_udp` WebRTC only uses the proxy
 // (UDP is never sent through SOCKS), so no local or public IP is exposed via ICE candidates.
-const WEBRTC_BLOCKED_POLICY = 'disable_non_proxied_udp';
+export const WEBRTC_BLOCKED_POLICY = 'disable_non_proxied_udp';
+
+// The real browser state (not a stored preference): true = WebRTC unrestricted
+const webRTCStatus = ref(true);
+const webRTCPolicy = ref('default');
+const webRTCLevelOfControl = ref('controllable_by_this_extension');
+// Another extension or a policy owns the setting: our switch can't change it
+const webRTCControlledElsewhere = computed(
+  () =>
+    webRTCLevelOfControl.value === 'controlled_by_other_extensions' ||
+    webRTCLevelOfControl.value === 'not_controllable',
+);
+
+const readWebRTCPolicy = async () => {
+  try {
+    const { value, levelOfControl } = await chrome.privacy.network.webRTCIPHandlingPolicy.get({});
+    webRTCPolicy.value = String(value);
+    webRTCLevelOfControl.value = levelOfControl;
+    webRTCStatus.value = value !== WEBRTC_BLOCKED_POLICY;
+  } catch (e) {
+    console.error('Could not read the WebRTC policy', e);
+  }
+};
 
 const checkWebRTC = async () => {
   webRTCSupported.value = typeof RTCPeerConnection !== 'undefined';
@@ -44,25 +62,34 @@ const checkRTCLeaks = async () => {
 };
 
 const setWebRTC = async (value: boolean) => {
-  if (value) {
-    await chrome.privacy.network.webRTCIPHandlingPolicy.clear({});
-  } else {
-    await chrome.privacy.network.webRTCIPHandlingPolicy.set({ value: WEBRTC_BLOCKED_POLICY });
+  if (!webRTCControlledElsewhere.value) {
+    try {
+      if (value) {
+        await chrome.privacy.network.webRTCIPHandlingPolicy.clear({});
+      } else {
+        await chrome.privacy.network.webRTCIPHandlingPolicy.set({ value: WEBRTC_BLOCKED_POLICY });
+      }
+    } catch (e) {
+      console.error('Could not change the WebRTC policy', e);
+    }
   }
+  // reflect what actually happened
+  await readWebRTCPolicy();
   await checkRTCLeaks();
 };
 
-watch(webRTCStatus, () => {
-  setWebRTC(webRTCStatus.value);
-});
-
 const useWebRtc = () => {
+  void readWebRTCPolicy();
   checkRTCLeaks();
 
   return {
+    readWebRTCPolicy,
     setWebRTC,
+    webRTCControlledElsewhere,
     webRTCLeaking,
     webRTCLeakedIPs,
+    webRTCLevelOfControl,
+    webRTCPolicy,
     webRTCStatus,
   };
 };
