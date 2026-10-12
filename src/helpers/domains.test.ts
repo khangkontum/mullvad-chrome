@@ -1,4 +1,11 @@
-import { checkDomain, isValidDomain, normalizeToFQDN, truncateHost } from '@/helpers/domain';
+import {
+  checkDomain,
+  isValidDomain,
+  normalizeHost,
+  normalizeToFQDN,
+  normalizeUserHost,
+  truncateHost,
+} from '@/helpers/domain';
 
 describe('domain helpers', () => {
   describe('checkDomain', () => {
@@ -135,6 +142,56 @@ describe('domain helpers', () => {
       const result = truncateHost(veryLong);
       expect(result.length).toBe(21);
       expect(result.endsWith('…')).toBe(true);
+    });
+  });
+
+  describe('normalizeHost', () => {
+    it.each([
+      ['example.com', 'example.com'],
+      ['  WWW.Example.COM. ', 'www.example.com'],
+      ['Bücher.de', 'xn--bcher-kva.de'],
+      ['xn--bcher-kva.de', 'xn--bcher-kva.de'],
+      ['10.64.0.1', '10.64.0.1'],
+      ['[2001:DB8::1]', '2001:db8::1'],
+      ['2001:db8::1', '2001:db8::1'],
+      ['localhost', 'localhost'],
+    ])('%s → %s', (input, expected) => {
+      expect(normalizeHost(input)).toBe(expected);
+    });
+
+    it.each([
+      '',
+      '   ',
+      'a b.com',
+      'example.com/path',
+      'https://example.com',
+      'example.com:8080',
+      'user@example.com',
+      'a;DIRECT',
+      '10.0.0.1; DIRECT',
+      'exa*mple.com',
+      '.example.com',
+      'a..b',
+      '10.0.0.256',
+      42,
+      null,
+    ])('rejects %s', (input) => {
+      expect(normalizeHost(input)).toBeNull();
+    });
+  });
+
+  describe('normalizeUserHost', () => {
+    it.each([
+      ['https://WWW.Example.com/some/path?q=1', 'www.example.com'],
+      [' Bücher.DE ', 'xn--bcher-kva.de'],
+      ['https://bücher.de/', 'xn--bcher-kva.de'],
+    ])('%s → %s', (input, expected) => {
+      expect(normalizeUserHost(input)).toBe(expected);
+    });
+
+    it('rejects garbage', () => {
+      expect(normalizeUserHost('a;DIRECT')).toBeNull();
+      expect(normalizeUserHost('')).toBeNull();
     });
   });
 });

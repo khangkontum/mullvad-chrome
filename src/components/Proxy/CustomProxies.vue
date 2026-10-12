@@ -9,7 +9,7 @@ import FeInfo from '@/components/Icons/FeInfo.vue';
 import SplitButton from '@/components/Buttons/SplitButton.vue';
 import TitleCategory from '@/components/TitleCategory.vue';
 
-import { isValidDomain, normalizeToFQDN } from '@/helpers/domain';
+import { isValidDomain, normalizeUserHost } from '@/helpers/domain';
 
 import useSocksProxy from '@/composables/useSocksProxy';
 import useLocations from '@/composables/useLocations';
@@ -47,7 +47,7 @@ const isHostExpanded = (host: string) => {
 };
 
 const handleCustomProxySelectManual = () => {
-  const normalizedDomain = normalizeToFQDN(inputProxyDomain.value);
+  const normalizedDomain = normalizeUserHost(inputProxyDomain.value);
   if (normalizedDomain && isValidDomain(normalizedDomain)) {
     proxySelect(normalizedDomain);
     inputProxyDomainError.value = false;
@@ -57,8 +57,9 @@ const handleCustomProxySelectManual = () => {
 };
 
 const neverProxyHostManual = () => {
-  if (inputProxyDomain.value && isValidDomain(inputProxyDomain.value)) {
-    neverProxyHost(inputProxyDomain.value);
+  const normalizedDomain = normalizeUserHost(inputProxyDomain.value);
+  if (normalizedDomain && isValidDomain(normalizedDomain)) {
+    neverProxyHost(normalizedDomain);
     inputProxyDomain.value = '';
     inputProxyDomainError.value = false;
   } else {

@@ -10,7 +10,7 @@ import { reloadOptions } from '@/helpers/browserExtension';
 import { updateCurrentTabProxyBadge } from '@/helpers/proxyBadge';
 
 import { reloadGlobalProxiedTabs, reloadMatchingTabs } from '@/helpers/tabs';
-import { checkDomain } from '@/helpers/domain';
+import { checkDomain, normalizeHost } from '@/helpers/domain';
 import { getTargetHost } from '@/helpers/socksProxy/getTargetHost';
 import { baseConfig, socksIp } from '@/helpers/socksProxy/constants';
 
@@ -191,8 +191,10 @@ const setCustomProxy = (
     ipv4_address,
     port = baseConfig.port,
   }: Partial<ProxyOperationArgs>,
-  host: string,
+  rawHost: string,
 ) => {
+  const host = normalizeHost(rawHost);
+  if (!host) return;
   const newHostProxy: ProxyInfo = {
     host: ipv4_address || socksIp,
     port: port!,
@@ -251,8 +253,10 @@ const allowProxy = (host: string) => {
   checkStatus();
 };
 
-const neverProxyHost = (host: string) => {
-  excludedHosts.value = [...excludedHosts.value, host];
+const neverProxyHost = (rawHost: string) => {
+  const host = normalizeHost(rawHost);
+  if (!host) return;
+  excludedHosts.value = [...new Set([...excludedHosts.value, host])];
   updateCurrentTabProxyBadge();
   reloadOptions();
   if (proxyAutoReload.value) {
