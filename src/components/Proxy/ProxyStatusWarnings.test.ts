@@ -3,8 +3,11 @@ import { flushPromises, mount } from '@vue/test-utils';
 
 import { DEFAULT_PROXY_STATUS, ProxyStatus } from '@/helpers/proxyStatus';
 
+let localSet: ReturnType<typeof vi.fn>;
+
 const mountWithStatus = async (status: Partial<ProxyStatus>) => {
   vi.resetModules();
+  localSet = vi.fn();
   vi.stubGlobal('chrome', {
     runtime: { id: 'ext-id' },
     tabs: { create: vi.fn() },
@@ -14,7 +17,7 @@ const mountWithStatus = async (status: Partial<ProxyStatus>) => {
         get: vi.fn(async () => ({
           proxyStatus: JSON.stringify({ ...DEFAULT_PROXY_STATUS, ...status }),
         })),
-        set: vi.fn(),
+        set: localSet,
       },
     },
   });
@@ -74,5 +77,35 @@ describe('ProxyStatusWarnings', () => {
       issues: ['Random mode: the proxy list is not loaded yet, traffic is blocked'],
     });
     expect(wrapper.findAll('.proxy-status-issue')).toHaveLength(1);
+  });
+
+  it('reset also clears the cached relay list', async () => {
+    const reload = vi.fn();
+    vi.stubGlobal('location', { reload });
+    const wrapper = await mountWithStatus({ active: true, error: 'Proxy settings error: x' });
+    await wrapper.find('#proxy-status-error button').trigger('click');
+    await flushPromises();
+    expect(localSet).toHaveBeenCalledWith(expect.objectContaining({ flatProxiesList: '[]' }));
+    expect(reload).toHaveBeenCalled();
+  });
+
+  it('shows apply errors as "not in effect", without claiming all traffic is blocked', async () => {
+    const wrapper = await mountWithStatus({
+      active: true,
+      controlLost: true,
+      applyError: 'Could not apply the proxy settings: not_controllable',
+    });
+    expect(wrapper.find('#proxy-status-error').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('Reset proxy settings');
+    expect(wrapper.find('#proxy-status-control-lost').text()).toContain('not_controllable');
+  });
+
+  it('shows read errors as blocked + retrying, without offering a reset', async () => {
+    const wrapper = await mountWithStatus({
+      active: true,
+      readError: 'Could not read the proxy settings: IO error',
+    });
+    expect(wrapper.find('#proxy-status-read-error').text()).toContain('Retrying');
+    expect(wrapper.text()).not.toContain('Reset proxy settings');
   });
 });

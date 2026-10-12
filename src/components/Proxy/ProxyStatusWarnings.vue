@@ -18,6 +18,8 @@ const showIncognito = computed(
 const hasWarnings = computed(
   () =>
     Boolean(proxyStatus.value.error) ||
+    Boolean(proxyStatus.value.readError) ||
+    Boolean(proxyStatus.value.applyError) ||
     proxyStatus.value.controlLost ||
     showIncognito.value ||
     proxyStatus.value.issues.length > 0,
@@ -35,10 +37,25 @@ const hasWarnings = computed(
       </Button>
     </div>
 
-    <div v-else-if="proxyStatus.controlLost" id="proxy-status-control-lost" class="mb-2">
+    <div v-else-if="proxyStatus.readError" id="proxy-status-read-error" class="mb-2">
       <IconLabel type="leak">
-        <strong>Your Mullvad proxy settings are not in effect.</strong> Chrome's proxy settings are
-        controlled by {{ controlledBy }}. Disable it to use the proxies configured here.
+        <strong>All traffic is blocked</strong> while the proxy settings can't be read. Retrying
+        automatically. ({{ proxyStatus.readError }})
+      </IconLabel>
+    </div>
+
+    <div
+      v-else-if="proxyStatus.controlLost || proxyStatus.applyError"
+      id="proxy-status-control-lost"
+      class="mb-2"
+    >
+      <IconLabel type="leak">
+        <strong>Your Mullvad proxy settings are not in effect.</strong>
+        <template v-if="proxyStatus.applyError"> {{ proxyStatus.applyError }}.</template>
+        <template v-else>
+          Chrome's proxy settings are controlled by {{ controlledBy }}. Disable it to use the
+          proxies configured here.
+        </template>
       </IconLabel>
     </div>
 

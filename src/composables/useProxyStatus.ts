@@ -27,6 +27,7 @@ void load();
 const resetProxySettings = async () => {
   await chrome.storage.local.set({
     excludedHosts: JSON.stringify([]),
+    flatProxiesList: JSON.stringify([]),
     globalProxy: JSON.stringify({}),
     globalProxyDetails: JSON.stringify({}),
     hostProxies: JSON.stringify({}),
