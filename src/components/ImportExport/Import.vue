@@ -6,6 +6,7 @@ import TitleCategory from '@/components/TitleCategory.vue';
 
 import useStore from '@/composables/useStore';
 import FeWarning from '@/components/Icons/FeWarning.vue';
+import { validateImportedSettings } from '@/helpers/socksProxy/validateSettings';
 
 const { excludedHosts, globalProxy, globalProxyDetails, hostProxies, hostProxiesDetails } =
   useStore();
@@ -31,20 +32,37 @@ const loadSettings = async () => {
   message.value = '';
   importSuccess.value = false;
   const text = await file.text();
+  let parsed: unknown;
   try {
-    settings.value = JSON.parse(text);
+    parsed = JSON.parse(text);
   } catch (e) {
     message.value = `Failed to parse json file: ${e}`;
+    return;
   }
+
+  const result = validateImportedSettings(parsed);
+  if (!result.ok) {
+    settings.value = '';
+    message.value = `Invalid settings file, nothing was imported: ${result.errors.join('; ')}`;
+    return;
+  }
+  settings.value = result.value;
 };
 
 const importSettings = async () => {
+  // re-validate: only validated, normalized settings are ever written
+  const result = validateImportedSettings(settings.value);
+  if (!result.ok) {
+    message.value = `Invalid settings file, nothing was imported: ${result.errors.join('; ')}`;
+    return;
+  }
   try {
-    excludedHosts.value = settings.value.excludedHosts;
-    globalProxy.value = settings.value.globalProxy;
-    globalProxyDetails.value = settings.value.globalProxyDetails;
-    hostProxies.value = settings.value.hostProxies;
-    hostProxiesDetails.value = settings.value.hostProxiesDetails;
+    const value = result.value;
+    excludedHosts.value = value.excludedHosts;
+    globalProxy.value = value.globalProxy as typeof globalProxy.value;
+    globalProxyDetails.value = value.globalProxyDetails as typeof globalProxyDetails.value;
+    hostProxies.value = value.hostProxies;
+    hostProxiesDetails.value = value.hostProxiesDetails;
 
     importSuccess.value = true;
     settings.value = '';
