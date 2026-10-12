@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run tsc
+      - run: npm test
+      - run: npm run build
+
+      - name: Package extension
+        id: pkg
+        run: |
+          version=$(node -p "require('./package.json').version")
+          name="mullvad-chrome-${version}-${GITHUB_SHA::7}.zip"
+          (cd extension && zip -r "../${name}" .)
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish rolling "latest" release
+        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --cleanup-tag --yes || true
+          gh release create latest "${{ steps.pkg.outputs.name }}" \
+            --target "$GITHUB_SHA" \
+            --title "Latest build (${GITHUB_SHA::7})" \
+            --notes "Built from ${GITHUB_SHA} on main. Unzip, then load the folder via chrome://extensions > Developer mode > Load unpacked." \
+            --latest
+
+      - name: Publish versioned release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "${{ steps.pkg.outputs.name }}" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes
