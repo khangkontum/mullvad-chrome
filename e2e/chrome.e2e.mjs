@@ -688,6 +688,31 @@ await extPage.evaluate(() => chrome.storage.local.set({ flatProxiesList: '[]' })
   );
 }
 
+// --- 14b. corrupted relay list: not a lock-out ---------------------------------------------
+await extPage.evaluate(() => chrome.storage.local.set({ flatProxiesList: '[{"broken' }));
+{
+  const st = await waitStatus((s) => s.issues.length > 0);
+  const apiOk = await page
+    .goto('https://api.mullvad.net/network/v1-beta1/socks-proxies')
+    .then((res) => res.ok())
+    .catch(() => false);
+  check(
+    'corrupted relay list: no block-all, api.mullvad.net reachable',
+    !st.error && apiOk,
+    `error=${st.error}; api ok=${apiOk}`,
+  );
+  const tp = await openToolbarPopup(sw, page);
+  await sleep(4000);
+  await tp.close();
+  const st2 = await waitStatus((s) => s.issues.length === 0);
+  const r = await amI();
+  check(
+    'corrupted relay list is replaced when the popup reloads it',
+    st2.issues.length === 0 && r.mullvad_server_type === 'SOCKS through WireGuard',
+    r.mullvad_exit_ip_hostname,
+  );
+}
+
 // --- 15. another extension takes over the proxy settings -----------------------------------
 await setState({ globalProxy: info(RELAYS.CH), globalProxyDetails: details(RELAYS.CH) });
 {
@@ -726,6 +751,16 @@ await setState({ globalProxy: info(RELAYS.CH), globalProxyDetails: details(RELAY
   await extPage.evaluate((id) => chrome.management.setEnabled(id, false), hijackerId);
   const st2 = await waitStatus((s) => s.applied && !s.controlLost);
   const back = await amI();
+  await sleep(800);
+  const tabBadgeAfter = await sw.evaluate(async () => {
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    return chrome.action.getBadgeText({ tabId: tab.id });
+  });
+  check(
+    'per-tab "!" badge cleared after recovery',
+    tabBadgeAfter !== '!',
+    `badge=${tabBadgeAfter}`,
+  );
   check(
     'other extension disabled: control regained and PAC re-applied (CH)',
     st2.applied && back.mullvad_exit_ip_hostname === RELAYS.CH.name,
