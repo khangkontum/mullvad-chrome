@@ -4,21 +4,29 @@ import { NCard, NTag } from 'naive-ui';
 import FeGithub from '@/components/Icons/FeGithub.vue';
 import FeInfo from '@/components/Icons/FeInfo.vue';
 
-import { version } from '@/helpers/browserExtension';
+import { commit, version } from '@/helpers/browserExtension';
+
+const REPO = 'https://github.com/khangkontum/mullvad-chrome';
+const UPSTREAM = 'https://github.com/mullvad/browser-extension';
+const shortCommit = commit.slice(0, 7);
 </script>
 
 <template>
   <div class="flex items-center p-3 pb-1">
     <n-tag round :bordered="false" type="info" class="mr-4">
-      <a href="https://github.com/mullvad/browser-extension/releases">
-        {{ version }} | Changelog
-      </a>
+      <a :href="`${REPO}/releases`"> {{ version }} | Releases </a>
       <template #icon>
         <FeInfo />
       </template>
     </n-tag>
+    <n-tag v-if="shortCommit" round :bordered="false" type="info" class="mr-4">
+      <a :href="`${REPO}/commit/${commit}`"> Commit {{ shortCommit }} </a>
+      <template #icon>
+        <FeGithub />
+      </template>
+    </n-tag>
     <n-tag round :bordered="false" type="info">
-      <a href="https://github.com/mullvad/browser-extension"> Source code </a>
+      <a :href="REPO"> Source code </a>
       <template #icon>
         <FeGithub />
       </template>
@@ -26,9 +34,14 @@ import { version } from '@/helpers/browserExtension';
   </div>
 
   <n-card class="mt-4">
+    <p class="mb-2">
+      Chrome port of the
+      <a :href="UPSTREAM">Mullvad Browser Extension</a>
+      by the Mullvad VPN team, who created the original extension and its design. Thanks to them!
+    </p>
     <p>
       Mullvad Browser Extension as a whole is licensed
-      <a href="https://github.com/mullvad/browser-extension/blob/master/LICENSE.md"> GPLv3+</a>
+      <a :href="`${UPSTREAM}/blob/main/LICENSE.md`"> GPLv3+</a>
       except for the parts specified below:
     </p>
 

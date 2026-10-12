@@ -4,6 +4,7 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [vue()],
+  define: { __COMMIT__: JSON.stringify('test') },
   test: {
     globals: true,
     environment: 'happy-dom',

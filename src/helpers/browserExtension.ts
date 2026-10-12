@@ -5,6 +5,7 @@ export enum Tab {
 }
 
 export const { version } = chrome.runtime.getManifest();
+export const commit = __COMMIT__;
 
 export const openPopup = () => {
   chrome.action.openPopup();

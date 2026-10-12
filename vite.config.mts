@@ -1,9 +1,19 @@
 /// <reference types="vitest" />
+import { execSync } from 'child_process';
 import { dirname, relative } from 'path';
 import { defineConfig, UserConfig } from 'vite';
 import Vue from '@vitejs/plugin-vue';
 import UnoCSS from 'unocss/vite';
 import { r, isDev } from './scripts/utils';
+
+// Commit the build comes from, shown on the About tab
+const commit = () => {
+  try {
+    return execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
+  } catch {
+    return '';
+  }
+};
 
 export const sharedConfig: UserConfig = {
   root: r('src'),
@@ -14,6 +24,7 @@ export const sharedConfig: UserConfig = {
   },
   define: {
     __DEV__: isDev,
+    __COMMIT__: JSON.stringify(commit()),
   },
   plugins: [
     Vue(),
