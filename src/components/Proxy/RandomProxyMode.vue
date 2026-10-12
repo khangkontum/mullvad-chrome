@@ -12,8 +12,8 @@ const randomProxyLabel = computed(() =>
 );
 const randomProxyDescription = computed(() =>
   randomProxyMode.value
-    ? 'Each website will use a different proxy server. This proxy used will stay the same for the current session.'
-    : 'When enabled, each website will use a different proxy server. This proxy used will stay the same for the current session.',
+    ? 'Each website will use a different proxy server. The proxy used will stay the same for the current session.'
+    : 'When enabled, each website will use a different proxy server. The proxy used will stay the same for the current session.',
 );
 </script>
 

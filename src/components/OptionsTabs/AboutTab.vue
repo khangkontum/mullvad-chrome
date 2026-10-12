@@ -32,7 +32,7 @@ import { version } from '@/helpers/browserExtension';
       except for the parts specified below:
     </p>
 
-    <ul list="disc inside" class="py-2">
+    <ul class="py-2 list-disc list-inside">
       <li>
         Open Sans -
         <a href="http://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>

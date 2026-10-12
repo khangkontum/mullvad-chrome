@@ -1,0 +1,76 @@
+/*
+ * Base styles WindiCSS's preflight used to emit (v0.9.10 and earlier, the released Firefox
+ * extension), which the UnoCSS migration's minimal reset in main.css doesn't cover.
+ * Imported after main.css so these element rules win, as they did with WindiCSS.
+ */
+
+html {
+  /* Not from WindiCSS: the popup and drawer have fixed px widths, so pin rem (used by the naive-ui
+     theme and tabs) to 16px. Otherwise Chrome's "Font size: Large" pushes text out of them. */
+  font-size: 16px;
+  text-size-adjust: 100%;
+  font-family: 'Source Sans Pro', Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  tab-size: 4;
+}
+
+body {
+  font-family: inherit;
+  line-height: inherit;
+  margin: 0;
+}
+
+h2,
+h3,
+h4 {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: inherit;
+}
+
+strong {
+  font-weight: bolder;
+}
+
+svg {
+  display: block;
+  vertical-align: middle;
+}
+
+pre {
+  margin: 0;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
+  font-size: 1em;
+}
+
+/* WindiCSS emitted this for <input>; <button> is added because Button.vue renders it through
+   <component :is>, which WindiCSS's tag scan missed, leaving <button>s at the browser's 13.33px. */
+input,
+button {
+  font-family: inherit;
+  font-size: 100%;
+  line-height: inherit;
+  color: inherit;
+  margin: 0;
+  padding: 0;
+}
+
+input::placeholder {
+  opacity: 1;
+  color: #9ca3af;
+}
+
+::file-selector-button {
+  font: inherit;
+}
+
+[type='search'] {
+  appearance: textfield;
+  outline-offset: -2px;
+}
