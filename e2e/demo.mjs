@@ -156,7 +156,7 @@ try {
   popup = await openPopup();
   await expand(popup, 'All websites');
   await pickCountry(popup, 'Switzerland');
-  caption('Global proxy set: the popup now reports a Zurich exit (SOCKS5 via the PAC script)');
+  caption('Global proxy set: the popup now reports a Zurich exit (SOCKS via the PAC script)');
   await sleep(4000);
   await closePopup(popup);
   caption('Reloading am.i.mullvad.net: exit is now a Swiss Mullvad SOCKS5 server');

@@ -5,7 +5,7 @@
     "US": "23.165.56.95",
     "DE": "185.213.155.190"
   },
-  "wgExit": "45.130.200.113",
+  "wgExit": "45.130.200.104",
   "results": [
     {
       "name": "optional permissions granted (tabs + <all_urls>) via native prompt",
@@ -15,7 +15,7 @@
     {
       "name": "baseline exit is Mullvad WireGuard (netns tunnel)",
       "ok": true,
-      "detail": "45.130.200.113 se-sto-wg-001 Sweden"
+      "detail": "45.130.200.104 se-sto-wg-001 Sweden"
     },
     {
       "name": "no rules → extension does not take over proxy settings",
@@ -50,7 +50,7 @@
     {
       "name": "live PAC script from chrome.proxy.settings evaluates correctly in a VM",
       "ok": true,
-      "detail": "[\"SOCKS5 10.124.0.53:1080\",\"SOCKS5 10.124.0.53:1080\",\"DIRECT\",\"DIRECT\"]"
+      "detail": "[\"SOCKS 10.124.0.53:1080\",\"SOCKS 10.124.0.53:1080\",\"DIRECT\",\"DIRECT\"]"
     },
     {
       "name": "proxy status: applied, in control, incognito access missing",
@@ -90,7 +90,7 @@
     {
       "name": "third-party host without rule, embedded in proxied example.com (JP), goes direct",
       "ok": true,
-      "detail": "api.ipify.org saw 45.130.200.113, expected 45.130.200.113"
+      "detail": "api.ipify.org saw 45.130.200.104, expected 45.130.200.104"
     },
     {
       "name": "third-party host with its own rule (ipinfo.io → US) uses that rule",
@@ -110,7 +110,7 @@
     {
       "name": "excluded ifconfig.co goes direct despite global + host rule",
       "ok": true,
-      "detail": "45.130.200.113 Sweden"
+      "detail": "45.130.200.104 Sweden"
     },
     {
       "name": "excluded mullvad.net also excludes am.i.mullvad.net",
@@ -125,17 +125,17 @@
     {
       "name": "random mode: am.i.mullvad.net exits via a Mullvad SOCKS relay (overrides exclusions)",
       "ok": true,
-      "detail": "us-det-wg-socks5-001"
+      "detail": "us-den-wg-socks5-207"
     },
     {
       "name": "random mode: stable pick per site",
       "ok": true,
-      "detail": "us-det-wg-socks5-001; ifconfig.co 2a02:6ea0:d509:3::a11d"
+      "detail": "us-den-wg-socks5-207; ifconfig.co 149.102.229.132"
     },
     {
       "name": "random mode: sites spread over different relays",
       "ok": true,
-      "detail": "am.i USA, ipify 23.234.89.20, ifconfig Italy"
+      "detail": "am.i USA, ipify 147.78.240.64, ifconfig Türkiye"
     },
     {
       "name": "service worker stopped via chrome://serviceworker-internals (1)",
@@ -145,7 +145,7 @@
     {
       "name": "after SW restart: random pick unchanged (seed kept in storage.session)",
       "ok": true,
-      "detail": "us-det-wg-socks5-001"
+      "detail": "us-den-wg-socks5-207"
     },
     {
       "name": "service worker stopped via chrome://serviceworker-internals (2)",
@@ -165,7 +165,7 @@
     {
       "name": "DNS leak test (global CH): all resolvers are Mullvad",
       "ok": true,
-      "detail": "ch-zrh-wg-001 (Switzerland, mullvad_dns=true)"
+      "detail": "se-sto-dns-001 (Sweden, mullvad_dns=true)"
     },
     {
       "name": "WebRTC unrestricted: STUN reveals the non-proxied exit IP (leak exists)",
@@ -190,7 +190,7 @@
     {
       "name": "popup connection check shows the proxied exit (Switzerland)",
       "ok": true,
-      "detail": "Proxy | VPN | DNS |  | Zurich, Switzerland |  | IP193.32.127.170 / 2a03:1b20:a:f011:6::d001 | Provider31173"
+      "detail": "Proxy | VPN | DOH |  | Zurich, Switzerland |  | IP193.32.127.170 | Provider31173"
     },
     {
       "name": "popup warns that proxies are not applied in Incognito (no incognito access)",
@@ -205,7 +205,7 @@
     {
       "name": "other sites unaffected by the invalid rule (direct)",
       "ok": true,
-      "detail": "45.130.200.113"
+      "detail": "45.130.200.104"
     },
     {
       "name": "corrupted settings: all traffic blocked (fail closed)",
@@ -225,7 +225,7 @@
     {
       "name": "reset recovers: proxy released, direct exit",
       "ok": true,
-      "detail": "{\"active\":false,\"applied\":false,\"levelOfControl\":\"controllable_by_this_extension\",\"controlLost\":false,\"error\":null,\"readError\":null,\"applyError\":null,\"issues\":[],\"incognitoAllowed\":false} 45.130.200.113"
+      "detail": "{\"active\":false,\"applied\":false,\"levelOfControl\":\"controllable_by_this_extension\",\"controlLost\":false,\"error\":null,\"readError\":null,\"applyError\":null,\"issues\":[],\"incognitoAllowed\":false} 45.130.200.104"
     },
     {
       "name": "malformed settings import is rejected and nothing is written",
@@ -240,7 +240,7 @@
     {
       "name": "random mode: same relays after opening the popup 3 times",
       "ok": true,
-      "detail": "am.i us-slc-wg-socks5-307→us-slc-wg-socks5-307; ipify 147.78.240.64→147.78.240.64"
+      "detail": "am.i fr-mrs-wg-socks5-002→fr-mrs-wg-socks5-002; ipify 37.19.200.144→37.19.200.144"
     },
     {
       "name": "random mode without relay list: traffic blocked but api.mullvad.net reachable",
@@ -250,7 +250,7 @@
     {
       "name": "opening the popup loads the relay list and random mode works again",
       "ok": true,
-      "detail": "535 relays, exit us-slc-wg-socks5-307"
+      "detail": "535 relays, exit fr-mrs-wg-socks5-002"
     },
     {
       "name": "corrupted relay list: no block-all, api.mullvad.net reachable",
@@ -260,7 +260,7 @@
     {
       "name": "corrupted relay list is replaced when the popup reloads it",
       "ok": true,
-      "detail": "us-slc-wg-socks5-307"
+      "detail": "fr-mrs-wg-socks5-002"
     },
     {
       "name": "other extension takes over: status controlLost",

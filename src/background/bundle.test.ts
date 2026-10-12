@@ -113,9 +113,9 @@ describe('built service worker bundle', () => {
   });
 
   it('emits a PAC script that routes correctly', () => {
-    expect(findProxy('https://am.i.mullvad.net/json')).toBe('SOCKS5 10.124.0.241:1080');
-    expect(findProxy('https://ipinfo.io/json')).toBe('SOCKS5 10.124.1.218:1080');
-    expect(findProxy('https://www.ipinfo.io/')).toBe('SOCKS5 10.124.1.218:1080');
+    expect(findProxy('https://am.i.mullvad.net/json')).toBe('SOCKS 10.124.0.241:1080');
+    expect(findProxy('https://ipinfo.io/json')).toBe('SOCKS 10.124.1.218:1080');
+    expect(findProxy('https://www.ipinfo.io/')).toBe('SOCKS 10.124.1.218:1080');
     expect(findProxy('https://ifconfig.co/')).toBe('DIRECT');
     expect(findProxy('http://192.168.1.1/')).toBe('DIRECT');
   });
@@ -127,7 +127,7 @@ describe('built service worker bundle', () => {
     listener({ randomProxyMode: { newValue: 'true' } }, 'local');
     for (let i = 0; i < 50 && !pac; i++) await new Promise((r) => setTimeout(r, 20));
     const a = findProxy('https://example.com/');
-    expect(a).toMatch(/^SOCKS5 10\.124\.\d+\.1:1080$/);
+    expect(a).toMatch(/^SOCKS 10\.124\.\d+\.1:1080$/);
     expect(findProxy('https://www.example.com/x')).toBe(a);
   });
 });

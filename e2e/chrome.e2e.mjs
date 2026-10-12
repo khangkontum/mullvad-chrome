@@ -214,8 +214,8 @@ fs.writeFileSync(`${ART}/pac-global-de.js`, ps.value.pacScript.data);
   const ctx = vm.createContext({});
   vm.runInContext(ps.value.pacScript.data, ctx);
   const cases = [
-    ['https://am.i.mullvad.net/json', `SOCKS5 ${RELAYS.DE.host}:1080`],
-    ['https://WWW.Example.com/', `SOCKS5 ${RELAYS.DE.host}:1080`],
+    ['https://am.i.mullvad.net/json', `SOCKS ${RELAYS.DE.host}:1080`],
+    ['https://WWW.Example.com/', `SOCKS ${RELAYS.DE.host}:1080`],
     ['http://192.168.1.1/', 'DIRECT'],
     ['http://localhost:8080/', 'DIRECT'],
   ];

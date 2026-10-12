@@ -20,7 +20,18 @@ export const HIJACKER = path.resolve(HERE, 'fixtures/proxy-hijacker');
 export const CDP_PORT = 9335;
 
 export async function launch({ profile = '/tmp/pw-profile', video = false, fresh = true } = {}) {
-  if (fresh) fs.rmSync(profile, { recursive: true, force: true });
+  if (fresh) {
+    fs.rmSync(profile, { recursive: true, force: true });
+    // Proxied sites are resolved locally (PAC "SOCKS"), so use Mullvad DoH like a real user
+    // would, instead of depending on the tunnel relay's plain DNS.
+    fs.mkdirSync(profile, { recursive: true });
+    fs.writeFileSync(
+      path.join(profile, 'Local State'),
+      JSON.stringify({
+        dns_over_https: { mode: 'secure', templates: 'https://dns.mullvad.net/dns-query' },
+      }),
+    );
+  }
   const context = await chromium.launchPersistentContext(profile, {
     channel: 'chromium',
     headless: false,

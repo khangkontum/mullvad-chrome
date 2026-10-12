@@ -80,8 +80,11 @@ The service worker can be inspected from `chrome://extensions` ("Inspect views: 
   browser restart. The site is approximated without the Public Suffix List (last two labels, or
   three for common `co.uk`-style suffixes). Until the relay list is loaded, everything except
   `api.mullvad.net` (needed to load the list) is blocked.
-- **DNS**: Chrome always resolves hostnames on the proxy for SOCKS5, so there is no "Proxy DNS"
-  toggle.
+- **DNS**: proxies are emitted as `SOCKS` (SOCKS4), so Chrome resolves hostnames locally with its
+  own resolver and sends the IP to the relay. With `SOCKS5` Chrome always leaves DNS to the relay,
+  and Mullvad relay resolvers intermittently fail (SERVFAIL/timeouts) for some domains (e.g.
+  kleinanzeigen.de, x.com's `twimg.com` CDN), breaking sites that work without the proxy. Use
+  Mullvad DNS (VPN app or DoH) so lookups stay private. IPv6-only sites can't be proxied.
 - **WebRTC**: the WebRTC switch sets `privacy.network.webRTCIPHandlingPolicy` to
   `disable_non_proxied_udp` (Chrome can't disable WebRTC entirely). The switch reflects the real
   browser setting and is disabled, with a warning, when another extension or a policy controls it.

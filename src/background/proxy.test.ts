@@ -70,7 +70,7 @@ describe('updateProxySettings', () => {
     Object.assign(store, globalCH);
     await updateProxySettings();
     expect(lastPac()).toMatchObject({ mandatory: true });
-    expect(lastPac().data).toContain('SOCKS5 10.124.0.241:1080');
+    expect(lastPac().data).toContain('SOCKS 10.124.0.241:1080');
     expect(status()).toMatchObject({
       active: true,
       applied: true,
@@ -200,7 +200,7 @@ describe('regressions from review', () => {
     await updateProxySettings();
     expect(lastPac().data).not.toBe(BLOCK_ALL_PAC);
     expect(status().error).toBeNull();
-    expect(evalPac('https://example.com/')).toBe('SOCKS5 10.124.0.241:1080');
+    expect(evalPac('https://example.com/')).toBe('SOCKS 10.124.0.241:1080');
   });
 
   it('random mode with a corrupted relay list keeps api.mullvad.net reachable', async () => {
@@ -224,7 +224,7 @@ describe('regressions from review', () => {
     await vi.advanceTimersByTimeAsync(1000);
     await updateProxySettings(); // wait for the queued retry
     expect(status().readError).toBeNull();
-    expect(lastPac().data).toContain('SOCKS5 10.124.0.241:1080');
+    expect(lastPac().data).toContain('SOCKS 10.124.0.241:1080');
   });
 
   it('never rejects (no unhandled rejections for fire-and-forget callers)', async () => {

@@ -46,13 +46,13 @@ const runPac = (state: ProxyState, url: string) =>
 describe('PAC: per-domain rules apply to the requested host', () => {
   it('proxies a request to a host with a proxy rule (e.g. a third-party subresource)', () => {
     expect(runPac(baseState, 'https://protected.example/tracker-pixel')).toBe(
-      'SOCKS5 10.64.0.1:1080',
+      'SOCKS 10.64.0.1:1080',
     );
   });
 
   it('applies the parent-domain rule to subdomains', () => {
     expect(runPac(baseState, 'https://login.protected.example/static.js')).toBe(
-      'SOCKS5 10.64.0.1:1080',
+      'SOCKS 10.64.0.1:1080',
     );
   });
 
@@ -66,8 +66,8 @@ describe('PAC: per-domain rules apply to the requested host', () => {
       globalProxy: socks('10.124.0.1'),
       globalProxyDetails: details(),
     };
-    expect(runPac(state, 'https://cdn.unrelated.example/a.js')).toBe('SOCKS5 10.124.0.1:1080');
-    expect(runPac(state, 'https://protected.example/')).toBe('SOCKS5 10.64.0.1:1080');
+    expect(runPac(state, 'https://cdn.unrelated.example/a.js')).toBe('SOCKS 10.124.0.1:1080');
+    expect(runPac(state, 'https://protected.example/')).toBe('SOCKS 10.64.0.1:1080');
   });
 
   it('prefers the exact subdomain rule over the parent domain rule', () => {
@@ -76,8 +76,8 @@ describe('PAC: per-domain rules apply to the requested host', () => {
       hostProxies: { ...baseState.hostProxies, 'www.protected.example': socks('10.8.0.1') },
       hostProxiesDetails: { ...baseState.hostProxiesDetails, 'www.protected.example': details() },
     };
-    expect(runPac(state, 'https://www.protected.example/')).toBe('SOCKS5 10.8.0.1:1080');
-    expect(runPac(state, 'https://api.protected.example/')).toBe('SOCKS5 10.64.0.1:1080');
+    expect(runPac(state, 'https://www.protected.example/')).toBe('SOCKS 10.8.0.1:1080');
+    expect(runPac(state, 'https://api.protected.example/')).toBe('SOCKS 10.64.0.1:1080');
   });
 
   it('a subdomain rule does not apply to the parent or sibling domains', () => {
@@ -115,7 +115,7 @@ describe('PAC: exclusions', () => {
 
   it('an excluded subdomain does not exclude its parent', () => {
     expect(runPac(state, 'https://direct.test.example/')).toBe('DIRECT');
-    expect(runPac(state, 'https://test.example/')).toBe('SOCKS5 10.124.0.1:1080');
+    expect(runPac(state, 'https://test.example/')).toBe('SOCKS 10.124.0.1:1080');
   });
 });
 
@@ -136,8 +136,8 @@ describe('PAC: local and reserved addresses', () => {
   });
 
   it('public IPs follow the global proxy', () => {
-    expect(runPac(state, 'http://8.8.8.8/')).toBe('SOCKS5 10.124.0.1:1080');
-    expect(runPac(state, 'http://172.32.0.1/')).toBe('SOCKS5 10.124.0.1:1080');
+    expect(runPac(state, 'http://8.8.8.8/')).toBe('SOCKS 10.124.0.1:1080');
+    expect(runPac(state, 'http://172.32.0.1/')).toBe('SOCKS 10.124.0.1:1080');
   });
 });
 
@@ -147,7 +147,7 @@ describe('PAC: random mode', () => {
 
   it('is stable per site, including subdomains', () => {
     const a = runPac(state, 'https://example.com/');
-    expect(a).toMatch(/^SOCKS5 10\.124\.\d+\.1:1080$/);
+    expect(a).toMatch(/^SOCKS 10\.124\.\d+\.1:1080$/);
     expect(runPac(state, 'https://www.example.com/x')).toBe(a);
     expect(runPac(state, 'https://cdn.static.example.com/x')).toBe(a);
   });
@@ -192,9 +192,9 @@ describe('PAC: random mode', () => {
     });
 
     it('only moves sites whose relay disappeared', () => {
-      const removed = relays.find((r) => before[0] === `SOCKS5 ${r.ipv4_address}:1080`)!;
+      const removed = relays.find((r) => before[0] === `SOCKS ${r.ipv4_address}:1080`)!;
       const after = picks({ ...state, flatProxiesList: relays.filter((r) => r !== removed) });
-      const removedPac = `SOCKS5 ${removed.ipv4_address}:1080`;
+      const removedPac = `SOCKS ${removed.ipv4_address}:1080`;
       sites.forEach((_, i) => {
         if (before[i] === removedPac) expect(after[i]).not.toBe(removedPac);
         else expect(after[i]).toBe(before[i]);
@@ -208,7 +208,7 @@ describe('PAC: random mode', () => {
       const moved = sites.filter((_, i) => after[i] !== before[i]);
       moved.forEach((url) =>
         expect(runPac({ ...state, flatProxiesList: [...relays, added] }, url)).toBe(
-          'SOCKS5 10.124.200.1:1080',
+          'SOCKS 10.124.200.1:1080',
         ),
       );
       // ~1/51 of the sites are expected to move
@@ -314,8 +314,8 @@ describe('PAC: host normalization', () => {
       },
       hostProxiesDetails: { 'Bücher.Example': details(), ' WWW.Other.Example ': details() },
     };
-    expect(runPac(state, 'https://xn--bcher-kva.example/')).toBe('SOCKS5 10.8.0.1:1080');
-    expect(runPac(state, 'https://shop.bücher.example/')).toBe('SOCKS5 10.8.0.1:1080');
-    expect(runPac(state, 'https://www.other.example/')).toBe('SOCKS5 10.9.0.1:1080');
+    expect(runPac(state, 'https://xn--bcher-kva.example/')).toBe('SOCKS 10.8.0.1:1080');
+    expect(runPac(state, 'https://shop.bücher.example/')).toBe('SOCKS 10.8.0.1:1080');
+    expect(runPac(state, 'https://www.other.example/')).toBe('SOCKS 10.9.0.1:1080');
   });
 });

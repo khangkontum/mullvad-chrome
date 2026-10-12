@@ -31,7 +31,7 @@ export type PacHostRule = {
   h: string;
   // whether subdomains of `h` match too (i.e. `h` is a registrable domain)
   s: boolean;
-  // PAC result, e.g. "SOCKS5 10.64.0.1:1080"
+  // PAC result, e.g. "SOCKS 10.64.0.1:1080"
   p?: string;
 };
 
@@ -70,9 +70,12 @@ export const toPacProxy = (proxy?: Partial<ProxyInfo>): string | null => {
   const host = typeof proxy.host === 'string' ? normalizeHost(proxy.host) : null;
   if (!host) return null;
   if (!isValidPort(proxy.port)) return null;
-  // Chrome always resolves hostnames on the proxy side for SOCKS5 (remote DNS).
-  const scheme = proxy.type === 'socks4' ? 'SOCKS' : 'SOCKS5';
-  return `${scheme} ${host.includes(':') ? `[${host}]` : host}:${proxy.port}`;
+  // Always "SOCKS" (SOCKS4): Chrome resolves the site locally (its own resolver, e.g. Mullvad DNS
+  // or DoH) and sends the IP to the relay. With "SOCKS5" Chrome always leaves DNS to the relay,
+  // and Mullvad relay resolvers intermittently fail (SERVFAIL/timeouts) for some domains, which
+  // breaks those sites (e.g. x.com's twimg.com CDN) while they work without the proxy.
+  // Mullvad relays accept SOCKS4; IPv6-only sites can't be reached through it.
+  return `SOCKS ${host.includes(':') ? `[${host}]` : host}:${proxy.port}`;
 };
 
 // A configured host also matches its subdomains when it is a registrable domain,
