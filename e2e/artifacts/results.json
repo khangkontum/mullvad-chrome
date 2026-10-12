@@ -5,7 +5,7 @@
     "US": "23.165.56.95",
     "DE": "185.213.155.190"
   },
-  "wgExit": "45.130.200.104",
+  "wgExit": "45.130.200.110",
   "results": [
     {
       "name": "optional permissions granted (tabs + <all_urls>) via native prompt",
@@ -15,7 +15,7 @@
     {
       "name": "baseline exit is Mullvad WireGuard (netns tunnel)",
       "ok": true,
-      "detail": "45.130.200.104 se-sto-wg-001 Sweden"
+      "detail": "45.130.200.110 se-sto-wg-001 Sweden"
     },
     {
       "name": "no rules → extension does not take over proxy settings",
@@ -46,6 +46,16 @@
       "name": "PAC applied and controlled by this extension",
       "ok": true,
       "detail": ""
+    },
+    {
+      "name": "live PAC script from chrome.proxy.settings evaluates correctly in a VM",
+      "ok": true,
+      "detail": "[\"SOCKS5 10.124.0.53:1080\",\"SOCKS5 10.124.0.53:1080\",\"DIRECT\",\"DIRECT\"]"
+    },
+    {
+      "name": "proxy status: applied, in control, incognito access missing",
+      "ok": true,
+      "detail": "{\"active\":true,\"applied\":true,\"levelOfControl\":\"controlled_by_this_extension\",\"controlLost\":false,\"error\":null,\"issues\":[],\"incognitoAllowed\":false}"
     },
     {
       "name": "toolbar badge shows proxy country for active tab",
@@ -80,7 +90,7 @@
     {
       "name": "third-party host without rule, embedded in proxied example.com (JP), goes direct",
       "ok": true,
-      "detail": "api.ipify.org saw 45.130.200.104, expected 45.130.200.104"
+      "detail": "api.ipify.org saw 45.130.200.110, expected 45.130.200.110"
     },
     {
       "name": "third-party host with its own rule (ipinfo.io → US) uses that rule",
@@ -100,7 +110,7 @@
     {
       "name": "excluded ifconfig.co goes direct despite global + host rule",
       "ok": true,
-      "detail": "45.130.200.104 Sweden"
+      "detail": "45.130.200.110 Sweden"
     },
     {
       "name": "excluded mullvad.net also excludes am.i.mullvad.net",
@@ -115,17 +125,17 @@
     {
       "name": "random mode: am.i.mullvad.net exits via a Mullvad SOCKS relay (overrides exclusions)",
       "ok": true,
-      "detail": "pl-waw-wg-socks5-102"
+      "detail": "de-fra-wg-socks5-101"
     },
     {
       "name": "random mode: stable pick per site",
       "ok": true,
-      "detail": "pl-waw-wg-socks5-102; ifconfig.co 2607:9000:2000:43::d001"
+      "detail": "de-fra-wg-socks5-101; ifconfig.co 2607:9000:100:41::d001"
     },
     {
       "name": "random mode: sites spread over different relays",
       "ok": true,
-      "detail": "am.i Poland, ipinfo FR, ifconfig United States"
+      "detail": "am.i Germany, ipify 146.70.165.131, ifconfig United States"
     },
     {
       "name": "service worker stopped via chrome://serviceworker-internals (1)",
@@ -135,7 +145,7 @@
     {
       "name": "after SW restart: random pick unchanged (seed kept in storage.session)",
       "ok": true,
-      "detail": "pl-waw-wg-socks5-102"
+      "detail": "de-fra-wg-socks5-101"
     },
     {
       "name": "service worker stopped via chrome://serviceworker-internals (2)",
@@ -181,6 +191,101 @@
       "name": "popup connection check shows the proxied exit (Switzerland)",
       "ok": true,
       "detail": "Proxy | VPN | DNS |  | Zurich, Switzerland |  | IP193.32.127.170 / 2a03:1b20:a:f011:6::d001 | Provider31173"
+    },
+    {
+      "name": "popup warns that proxies are not applied in Incognito (no incognito access)",
+      "ok": true,
+      "detail": "Proxies are not applied in Incognito windows unless the extension is allowed in Incognito. Open extension settings"
+    },
+    {
+      "name": "enabled rule with an injected/invalid proxy host blocks the site instead of going direct",
+      "ok": true,
+      "detail": "net::ERR_PROXY_CONNECTION_FAILED; issues=[\"Invalid proxy for ipinfo.io: its traffic is blocked\"]"
+    },
+    {
+      "name": "other sites unaffected by the invalid rule (direct)",
+      "ok": true,
+      "detail": "45.130.200.110"
+    },
+    {
+      "name": "corrupted settings: all traffic blocked (fail closed)",
+      "ok": true,
+      "detail": "Proxy settings error: stored \"globalProxyDetails\" is corrupted; net::ERR_PROXY_CONNECTION_FAILED"
+    },
+    {
+      "name": "popup shows the settings error",
+      "ok": true,
+      "detail": "All traffic is blocked. Proxy settings error: stored \"globalProxyDetails\" is corrupted Reset proxy settings"
+    },
+    {
+      "name": "global toolbar badge shows \"!\"",
+      "ok": true,
+      "detail": "!"
+    },
+    {
+      "name": "reset recovers: proxy released, direct exit",
+      "ok": true,
+      "detail": "{\"active\":false,\"applied\":false,\"levelOfControl\":\"controllable_by_this_extension\",\"controlLost\":false,\"error\":null,\"issues\":[],\"incognitoAllowed\":false} 45.130.200.110"
+    },
+    {
+      "name": "malformed settings import is rejected and nothing is written",
+      "ok": true,
+      "detail": "Invalid settings file, nothing was imported: globalProxy: must be a SOCKS proxy with a valid host and port (1-65535)"
+    },
+    {
+      "name": "valid import (with uppercase hosts) is normalized and applied (ipinfo.io → JP)",
+      "ok": true,
+      "detail": "138.199.21.240 JP"
+    },
+    {
+      "name": "random mode: same relays after opening the popup 3 times",
+      "ok": true,
+      "detail": "am.i nl-ams-wg-socks5-006→nl-ams-wg-socks5-006; ipify 173.249.254.160→173.249.254.160"
+    },
+    {
+      "name": "random mode without relay list: traffic blocked but api.mullvad.net reachable",
+      "ok": true,
+      "detail": "net::ERR_PROXY_CONNECTION_FAILED; api ok=true; Random mode: the proxy list is not loaded yet, traffic is blocked"
+    },
+    {
+      "name": "opening the popup loads the relay list and random mode works again",
+      "ok": true,
+      "detail": "535 relays, exit nl-ams-wg-socks5-006"
+    },
+    {
+      "name": "other extension takes over: status controlLost",
+      "ok": true,
+      "detail": "{\"active\":true,\"applied\":false,\"levelOfControl\":\"controlled_by_other_extensions\",\"controlLost\":true,\"error\":null,\"issues\":[],\"incognitoAllowed\":false}"
+    },
+    {
+      "name": "(traffic indeed follows the other extension: us-nyc relay)",
+      "ok": true,
+      "detail": "us-nyc-wg-socks5-001"
+    },
+    {
+      "name": "toolbar badge shows \"!\" while control is lost",
+      "ok": true,
+      "detail": "!"
+    },
+    {
+      "name": "popup warns that the proxy settings are controlled by another extension",
+      "ok": true,
+      "detail": "Your Mullvad proxy settings are not in effect. Chrome's proxy settings are controlled by another extension. Disable it to use the proxies configured here."
+    },
+    {
+      "name": "other extension disabled: control regained and PAC re-applied (CH)",
+      "ok": true,
+      "detail": "ch-zrh-wg-socks5-001"
+    },
+    {
+      "name": "site access revoked: global proxy still applied",
+      "ok": true,
+      "detail": "ch-zrh-wg-socks5-001"
+    },
+    {
+      "name": "popup explains the proxy is still applied without the permissions",
+      "ok": true,
+      "detail": ""
     },
     {
       "name": "removing all rules clears proxy settings",

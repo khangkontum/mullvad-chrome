@@ -52,3 +52,14 @@ npm run tunnel:deregister  # remove the WireGuard key/device from the account
 - WebRTC: STUN exposes the non-proxied exit by default; the extension's toggle sets
   `webRTCIPHandlingPolicy=disable_non_proxied_udp` and no IP is exposed anymore
 - popup connection check shows the proxied exit
+- the live PAC script from `chrome.proxy.settings` evaluates correctly in a VM
+- proxy status: applied/in control; Incognito warning shown (no incognito access)
+- an enabled rule with an invalid proxy (PAC injection attempt) blocks the site, others unaffected
+- corrupted stored settings block all traffic, popup shows the error and `!` badge, reset recovers
+- malformed settings import is rejected without writing; a valid one (uppercase hosts) applies
+- random mode keeps the same relays across popup opens (relay list refetch)
+- random mode with an empty relay list blocks traffic but keeps `api.mullvad.net` reachable, and
+  opening the popup loads the list
+- a second extension (`fixtures/proxy-hijacker`, loaded at runtime through CDP) taking over the
+  proxy settings is detected (status, `!` badge, popup warning); disabling it restores our PAC
+- revoking `<all_urls>` (site access "on click") keeps the proxy applied

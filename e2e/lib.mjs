@@ -16,15 +16,23 @@ export const log = (...a) => {
   fs.appendFileSync(path.join(ART, 'e2e.log'), line + '\n');
 };
 
+export const HIJACKER = path.resolve(HERE, 'fixtures/proxy-hijacker');
+export const CDP_PORT = 9335;
+
 export async function launch({ profile = '/tmp/pw-profile', video = false, fresh = true } = {}) {
   if (fresh) fs.rmSync(profile, { recursive: true, force: true });
   const context = await chromium.launchPersistentContext(profile, {
     channel: 'chromium',
     headless: false,
+    // allow loading the test fixture extension at runtime (instead of --disable-extensions-except)
+    ignoreDefaultArgs: ['--disable-extensions'],
     viewport: { width: 1280, height: 860 },
     args: [
-      `--disable-extensions-except=${EXT}`,
       `--load-extension=${EXT}`,
+      // for loading the test fixture extension later (CDP Extensions.loadUnpacked) and
+      // reaching the toolbar popup through CDP
+      `--remote-debugging-port=${CDP_PORT}`,
+      '--enable-unsafe-extension-debugging',
       '--window-position=0,0',
       '--window-size=1280,960',
     ],
@@ -62,4 +70,22 @@ export async function exitInfo(page, url = 'https://am.i.mullvad.net/json') {
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
   const text = await page.locator('body').innerText();
   return JSON.parse(text);
+}
+
+// Playwright only exposes the toolbar popup through a CDP connection
+export async function cdpBrowser() {
+  return chromium.connectOverCDP(`http://127.0.0.1:${CDP_PORT}`);
+}
+
+export async function openToolbarPopup(sw, page) {
+  await page.bringToFront();
+  await sw.evaluate(() => chrome.action.openPopup());
+  for (let i = 0; i < 20; i++) {
+    await sleep(500);
+    const browser = await cdpBrowser();
+    for (const c of browser.contexts())
+      for (const p of c.pages())
+        if (p.url().includes('/dist/popup/index.html') && !p.isClosed()) return p;
+  }
+  throw new Error('toolbar popup not found');
 }

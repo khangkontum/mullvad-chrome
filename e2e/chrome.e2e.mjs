@@ -1,7 +1,18 @@
 // End-to-end test of the Chrome MV3 Mullvad extension, run inside the Mullvad WireGuard netns.
 import fs from 'node:fs';
+import vm from 'node:vm';
 import { randomUUID } from 'node:crypto';
-import { launch, acceptPermissionPrompt, ART, sleep, log, getSW } from './lib.mjs';
+import {
+  launch,
+  acceptPermissionPrompt,
+  ART,
+  sleep,
+  log,
+  getSW,
+  cdpBrowser,
+  openToolbarPopup,
+  HIJACKER,
+} from './lib.mjs';
 
 fs.rmSync(`${ART}/e2e.log`, { force: true });
 const results = [];
@@ -85,17 +96,58 @@ const setState = async (state) => {
 const proxySettings = () => extPage.evaluate(() => chrome.proxy.settings.get({}));
 
 const page = await context.newPage();
-const getJSON = async (url) => {
+const getJSON = async (url, attempt = 0) => {
   const sep = url.includes('?') ? '&' : '?';
   const res = await page.goto(`${url}${sep}_=${Date.now()}`, {
     waitUntil: 'domcontentloaded',
     timeout: 30000,
   });
+  // third-party IP echo services occasionally rate-limit shared exit IPs
+  if (res.status() === 429 && attempt < 2) {
+    log(`429 from ${url}, retrying`);
+    await sleep(4000);
+    return getJSON(url, attempt + 1);
+  }
   if (!res.ok()) throw new Error(`${url}: HTTP ${res.status()}`);
   return JSON.parse(await page.locator('body').innerText());
 };
 const amI = () => getJSON('https://am.i.mullvad.net/json');
 const shot = (name, p = page) => p.screenshot({ path: `${ART}/${name}.png` });
+const getStatus = async () =>
+  JSON.parse(
+    (await extPage.evaluate(() => chrome.storage.local.get('proxyStatus'))).proxyStatus ?? '{}',
+  );
+const waitStatus = async (pred, timeout = 8000) => {
+  const start = Date.now();
+  let status;
+  while (Date.now() - start < timeout) {
+    status = await getStatus();
+    if (pred(status)) return status;
+    await sleep(200);
+  }
+  return status;
+};
+// true if the request fails at the network level (blocked by the PAC / proxy)
+const isBlocked = async (url) => {
+  let result = false;
+  try {
+    await page.goto(`${url}${url.includes('?') ? '&' : '?'}_=${Date.now()}`, { timeout: 20000 });
+  } catch (e) {
+    const m = e.message.match(/net::ERR_(PROXY|SOCKS|TUNNEL|CONNECTION|EMPTY)\w*/);
+    result = m ? m[0] : false;
+  }
+  // leave the chrome-error page so the next navigation isn't interrupted
+  await page.goto('about:blank').catch(() => {});
+  await sleep(300);
+  return result;
+};
+const openPopupTab = async () => {
+  const p = await context.newPage();
+  await p.setViewportSize({ width: 480, height: 900 });
+  await p.goto(`chrome-extension://${extId}/dist/popup/index.html`);
+  await sleep(2500);
+  return p;
+};
 
 // --- 0. permissions + baseline -------------------------------------------------------------
 await extPage.getByText('Proxy', { exact: true }).first().click();
@@ -156,6 +208,30 @@ check(
     ps.value.pacScript.mandatory === true,
 );
 fs.writeFileSync(`${ART}/pac-global-de.js`, ps.value.pacScript.data);
+
+// The PAC script Chrome actually holds (emitted by the built bundle) evaluates correctly
+{
+  const ctx = vm.createContext({});
+  vm.runInContext(ps.value.pacScript.data, ctx);
+  const cases = [
+    ['https://am.i.mullvad.net/json', `SOCKS5 ${RELAYS.DE.host}:1080`],
+    ['https://WWW.Example.com/', `SOCKS5 ${RELAYS.DE.host}:1080`],
+    ['http://192.168.1.1/', 'DIRECT'],
+    ['http://localhost:8080/', 'DIRECT'],
+  ];
+  const got = cases.map(([url]) => ctx.FindProxyForURL(url, new URL(url).hostname));
+  check(
+    'live PAC script from chrome.proxy.settings evaluates correctly in a VM',
+    cases.every(([, expected], i) => got[i] === expected),
+    JSON.stringify(got),
+  );
+}
+const status1 = await getStatus();
+check(
+  'proxy status: applied, in control, incognito access missing',
+  status1.applied && !status1.controlLost && !status1.error && status1.incognitoAllowed === false,
+  JSON.stringify(status1),
+);
 
 // badge reflects the global proxy for the active tab
 await page.bringToFront();
@@ -262,7 +338,7 @@ check('non-excluded host still uses global CH', ex3.ip === exitIp.CH, ex3.ip);
 await setState({ randomProxyMode: true, excludedHosts: ['mullvad.net'] });
 const r1 = await amI();
 const r2 = await amI();
-const rIpinfo = await getJSON('https://ipinfo.io/json');
+const rIpinfo = await getJSON('https://api.ipify.org?format=json');
 const rIfc = await getJSON('https://ifconfig.co/json');
 const rIfc2 = await getJSON('https://ifconfig.co/json');
 check(
@@ -278,7 +354,7 @@ check(
 check(
   'random mode: sites spread over different relays',
   new Set([r1.ip, rIpinfo.ip, rIfc.ip]).size >= 2,
-  `am.i ${r1.country}, ipinfo ${rIpinfo.country}, ifconfig ${rIfc.country}`,
+  `am.i ${r1.country}, ipify ${rIpinfo.ip}, ifconfig ${rIfc.country}`,
 );
 await shot('05-random-mode');
 
@@ -430,7 +506,260 @@ check(
   popupText.split('\n').slice(0, 8).join(' | '),
 );
 
-// --- 9. cleanup: removing all rules releases proxy settings ------------------------------------
+// --- 9. incognito warning ------------------------------------------------------------------
+{
+  const p = await openPopupTab();
+  const incognito = p.locator('#proxy-status-incognito');
+  check(
+    'popup warns that proxies are not applied in Incognito (no incognito access)',
+    await incognito.isVisible(),
+    (await incognito.innerText().catch(() => '')).replace(/\s+/g, ' '),
+  );
+  await shot('09-incognito-warning', p);
+  await p.close();
+}
+
+// --- 10. invalid rule fails closed ---------------------------------------------------------
+await setState({
+  hostProxies: { 'ipinfo.io': { ...info(RELAYS.JP), host: `${RELAYS.JP.host}:1080; DIRECT` } },
+  hostProxiesDetails: { 'ipinfo.io': details(RELAYS.JP) },
+});
+{
+  const blocked = await isBlocked('https://ipinfo.io/json');
+  const st = await getStatus();
+  check(
+    'enabled rule with an injected/invalid proxy host blocks the site instead of going direct',
+    Boolean(blocked) && st.issues.length === 1,
+    `${blocked}; issues=${JSON.stringify(st.issues)}`,
+  );
+  const other = await amI();
+  check('other sites unaffected by the invalid rule (direct)', other.ip === WG_EXIT, other.ip);
+}
+
+// --- 11. corrupted stored settings block everything, with a reset ---------------------------
+await setState({ globalProxy: info(RELAYS.CH), globalProxyDetails: details(RELAYS.CH) });
+await extPage.evaluate(() =>
+  chrome.storage.local.set({ globalProxyDetails: '{"socksEnabled": tr' }),
+);
+{
+  const st = await waitStatus((s) => Boolean(s.error));
+  const blocked = await isBlocked('https://am.i.mullvad.net/json');
+  check(
+    'corrupted settings: all traffic blocked (fail closed)',
+    Boolean(st.error) && Boolean(blocked),
+    `${st.error}; ${blocked}`,
+  );
+  const p = await openPopupTab();
+  const err = p.locator('#proxy-status-error');
+  check(
+    'popup shows the settings error',
+    await err.isVisible(),
+    (await err.innerText().catch(() => '')).replace(/\s+/g, ' '),
+  );
+  await shot('10-corrupted-settings-error', p);
+  const badgeErr = await sw.evaluate(() => chrome.action.getBadgeText({}));
+  check('global toolbar badge shows "!"', badgeErr === '!', badgeErr);
+  await p.getByText('Reset proxy settings').click();
+  const st2 = await waitStatus((s) => !s.error && !s.active);
+  const back = await amI();
+  check(
+    'reset recovers: proxy released, direct exit',
+    !st2.error && back.ip === WG_EXIT,
+    `${JSON.stringify(st2)} ${back.ip}`,
+  );
+  await p.close();
+}
+
+// --- 12. settings import validation ----------------------------------------------------------
+{
+  await extPage.bringToFront();
+  await extPage.reload();
+  await sleep(1500);
+  await extPage.getByText('Import/Export', { exact: true }).first().click();
+  await sleep(800);
+  const before = await extPage.evaluate(() =>
+    chrome.storage.local.get(['hostProxies', 'globalProxy']),
+  );
+  const malformed = {
+    excludedHosts: [],
+    globalProxy: { type: 'socks', host: '1.2.3.4:1080; DIRECT', port: 1080 },
+    globalProxyDetails: { socksEnabled: true },
+    hostProxies: {},
+    hostProxiesDetails: {},
+  };
+  await extPage.locator('input[type=file]').setInputFiles({
+    name: 'malformed.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(malformed)),
+  });
+  await sleep(1000);
+  const msg = await extPage
+    .locator('.text-error')
+    .first()
+    .innerText()
+    .catch(() => '');
+  const importVisible = await extPage
+    .getByRole('button', { name: 'Import' })
+    .isVisible()
+    .catch(() => false);
+  const after = await extPage.evaluate(() =>
+    chrome.storage.local.get(['hostProxies', 'globalProxy']),
+  );
+  await shot('11-import-rejected', extPage);
+  check(
+    'malformed settings import is rejected and nothing is written',
+    /Invalid settings file/.test(msg) &&
+      !importVisible &&
+      JSON.stringify(before) === JSON.stringify(after),
+    msg.slice(0, 160),
+  );
+
+  const good = {
+    excludedHosts: ['IFCONFIG.co'],
+    globalProxy: {},
+    globalProxyDetails: {},
+    hostProxies: { 'IPinfo.io': info(RELAYS.JP) },
+    hostProxiesDetails: { 'IPinfo.io': details(RELAYS.JP) },
+  };
+  await extPage.locator('input[type=file]').setInputFiles({
+    name: 'good.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(good)),
+  });
+  await sleep(800);
+  await extPage.getByRole('button', { name: 'Import' }).click();
+  await sleep(2000);
+  const imported = await getJSON('https://ipinfo.io/json');
+  check(
+    'valid import (with uppercase hosts) is normalized and applied (ipinfo.io → JP)',
+    imported.ip === exitIp.JP,
+    `${imported.ip} ${imported.country}`,
+  );
+  await page.bringToFront();
+}
+
+// --- 13. random mode: stable across popup opens (relay list refetch) ------------------------
+await setState({ randomProxyMode: true });
+{
+  const s1 = (await amI()).mullvad_exit_ip_hostname;
+  const i1 = (await getJSON('https://api.ipify.org?format=json')).ip;
+  for (let i = 0; i < 3; i++) {
+    const tp = await openToolbarPopup(sw, page);
+    await sleep(3500); // popup refetches the relay list
+    await tp.close();
+    await sleep(500);
+  }
+  const s2 = (await amI()).mullvad_exit_ip_hostname;
+  const i2 = (await getJSON('https://api.ipify.org?format=json')).ip;
+  check(
+    'random mode: same relays after opening the popup 3 times',
+    s1 === s2 && i1 === i2,
+    `am.i ${s1}→${s2}; ipify ${i1}→${i2}`,
+  );
+}
+
+// --- 14. random mode with no relay list: Mullvad API still reachable, list loads -----------
+await extPage.evaluate(() => chrome.storage.local.set({ flatProxiesList: '[]' }));
+{
+  const st = await waitStatus((s) => s.issues.length > 0);
+  const blocked = await isBlocked('https://am.i.mullvad.net/json');
+  const apiOk = await page
+    .goto('https://api.mullvad.net/network/v1-beta1/socks-proxies')
+    .then((res) => res.ok())
+    .catch(() => false);
+  check(
+    'random mode without relay list: traffic blocked but api.mullvad.net reachable',
+    Boolean(blocked) && apiOk,
+    `${blocked}; api ok=${apiOk}; ${st.issues}`,
+  );
+  const tp = await openToolbarPopup(sw, page);
+  await sleep(4000);
+  await shot('12-random-empty-list-popup', tp);
+  await tp.close();
+  const listLen = JSON.parse(
+    (await extPage.evaluate(() => chrome.storage.local.get('flatProxiesList'))).flatProxiesList,
+  ).length;
+  const st2 = await waitStatus((s) => s.issues.length === 0);
+  const r = await amI();
+  check(
+    'opening the popup loads the relay list and random mode works again',
+    listLen > 100 && st2.issues.length === 0 && r.mullvad_server_type === 'SOCKS through WireGuard',
+    `${listLen} relays, exit ${r.mullvad_exit_ip_hostname}`,
+  );
+}
+
+// --- 15. another extension takes over the proxy settings -----------------------------------
+await setState({ globalProxy: info(RELAYS.CH), globalProxyDetails: details(RELAYS.CH) });
+{
+  const browserSession = await (await cdpBrowser()).newBrowserCDPSession();
+  const { id: hijackerId } = await browserSession.send('Extensions.loadUnpacked', {
+    path: HIJACKER,
+  });
+  const st = await waitStatus((s) => s.controlLost);
+  const hijacked = await amI();
+  check(
+    'other extension takes over: status controlLost',
+    st.controlLost && st.levelOfControl === 'controlled_by_other_extensions',
+    JSON.stringify(st),
+  );
+  check(
+    '(traffic indeed follows the other extension: us-nyc relay)',
+    hijacked.mullvad_exit_ip_hostname === RELAYS.US.name,
+    hijacked.mullvad_exit_ip_hostname,
+  );
+  const tabBadge = await sw.evaluate(async () => {
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    return chrome.action.getBadgeText({ tabId: tab.id });
+  });
+  check('toolbar badge shows "!" while control is lost', tabBadge === '!', tabBadge);
+  const tp = await openToolbarPopup(sw, page);
+  await sleep(2500);
+  const lost = tp.locator('#proxy-status-control-lost');
+  check(
+    'popup warns that the proxy settings are controlled by another extension',
+    await lost.isVisible(),
+    (await lost.innerText().catch(() => '')).replace(/\s+/g, ' '),
+  );
+  await shot('13-control-lost-popup', tp);
+  await tp.close();
+
+  await extPage.evaluate((id) => chrome.management.setEnabled(id, false), hijackerId);
+  const st2 = await waitStatus((s) => s.applied && !s.controlLost);
+  const back = await amI();
+  check(
+    'other extension disabled: control regained and PAC re-applied (CH)',
+    st2.applied && back.mullvad_exit_ip_hostname === RELAYS.CH.name,
+    back.mullvad_exit_ip_hostname,
+  );
+}
+
+// --- 16. site access revoked ("on click"): proxy keeps working ------------------------------
+{
+  const removed = await extPage.evaluate(() =>
+    chrome.permissions.remove({ origins: ['<all_urls>'] }),
+  );
+  const has = await extPage.evaluate(() =>
+    chrome.permissions.contains({ origins: ['<all_urls>'] }),
+  );
+  await sleep(1000);
+  const r = await amI();
+  const st = await getStatus();
+  check(
+    'site access revoked: global proxy still applied',
+    removed && !has && r.mullvad_exit_ip_hostname === RELAYS.CH.name && st.applied,
+    `${r.mullvad_exit_ip_hostname}`,
+  );
+  const p = await openPopupTab();
+  await shot('14-site-access-revoked-popup', p);
+  const note = await p
+    .getByText('Your proxy settings are still applied')
+    .isVisible()
+    .catch(() => false);
+  check('popup explains the proxy is still applied without the permissions', note);
+  await p.close();
+}
+
+// --- 17. cleanup: removing all rules releases proxy settings ------------------------------------
 await setState({});
 ps = await proxySettings();
 check('removing all rules clears proxy settings', ps.value.mode === 'system', ps.value.mode);
