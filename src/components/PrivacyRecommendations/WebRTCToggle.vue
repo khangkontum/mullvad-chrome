@@ -9,7 +9,7 @@ import IconLabel from '@/components/IconLabel.vue';
 import { closePopup } from '@/helpers/browserExtension';
 import useWebRtc from '@/composables/useWebRtc';
 
-const { setWebRTC, webRTCStatus } = useWebRtc();
+const { webRTCStatus } = useWebRtc();
 const webRTCLabel = ref('Enabled');
 
 watchEffect(() => {

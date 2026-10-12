@@ -44,5 +44,5 @@ export default [
       },
     },
   },
-  { ignores: ['**/dist/'] },
+  { ignores: ['**/dist/', 'e2e/artifacts/'] },
 ];
